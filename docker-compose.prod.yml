@@ -1,0 +1,128 @@
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pmm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-pmm}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pmm} -d ${POSTGRES_DB:-pmm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks:
+      - internal
+
+  backend:
+    image: ${PMM_BACKEND_IMAGE:-pmm-backend:${APP_VERSION:-dev}}
+    restart: unless-stopped
+    command: >-
+      sh -c "gunicorn app.main:app
+      -k uvicorn.workers.UvicornWorker
+      -w ${BACKEND_WORKERS:-3}
+      -b 0.0.0.0:8000
+      --access-logfile -
+      --error-logfile -"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      SQL_ECHO: ${SQL_ECHO:-false}
+      FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+      FIRST_ADMIN_FULL_NAME: ${FIRST_ADMIN_FULL_NAME:-First Administrator}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost}
+      BACKEND_VERSION: ${APP_VERSION:-dev}
+      FRONTEND_VERSION: ${APP_VERSION:-dev}
+      UPDATE_GITHUB_REPO: ${UPDATE_GITHUB_REPO:?Set UPDATE_GITHUB_REPO in .env.prod}
+      UPDATE_GITHUB_TOKEN: ${UPDATE_GITHUB_TOKEN:-}
+      REQUIRE_SIGNED_TAGS: ${REQUIRE_SIGNED_TAGS:-false}
+      UPDATE_CHECK_CACHE_TTL_SECONDS: ${UPDATE_CHECK_CACHE_TTL_SECONDS:-300}
+      UPDATE_RELEASES_LIMIT: ${UPDATE_RELEASES_LIMIT:-10}
+      UPDATE_RELEASES_KEEP: ${UPDATE_RELEASES_KEEP:-5}
+      UPDATE_MIN_FREE_GB: ${UPDATE_MIN_FREE_GB:-2}
+      UPDATE_LOGS_DIR: ${UPDATE_LOGS_DIR:-/opt/pmm/logs}
+      UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/opt/pmm}
+      UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-/opt/pmm/current/docker-compose.prod.yml}
+      UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-/opt/pmm/.env.prod}
+      UPDATE_VERSION_ENV_KEY: ${UPDATE_VERSION_ENV_KEY:-APP_VERSION}
+      UPDATER_MODE: "false"
+      ENABLE_LEGACY_JSON_RESTORE: ${ENABLE_LEGACY_JSON_RESTORE:-false}
+      ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
+      BACKUP_DIR: ${BACKUP_DIR:-/var/lib/pmm/backups}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-10}
+      POSTING_ERROR_LOG_PATH: ${POSTING_ERROR_LOG_PATH:-/var/log/pmm/posting_errors.log}
+    volumes:
+      - pmm_artifacts:${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
+      - pmm_backups:${BACKUP_DIR:-/var/lib/pmm/backups}
+      - pmm_logs:/var/log/pmm
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - internal
+
+  migrator:
+    image: ${PMM_BACKEND_IMAGE:-pmm-backend:${APP_VERSION:-dev}}
+    restart: "no"
+    command: ["sh", "-c", "alembic upgrade head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      SQL_ECHO: ${SQL_ECHO:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  frontend:
+    image: ${PMM_FRONTEND_IMAGE:-pmm-frontend:${APP_VERSION:-dev}}
+    restart: unless-stopped
+    expose:
+      - "80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pmm-frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.pmm-frontend.entrypoints=https"
+      - "traefik.http.routers.pmm-frontend.tls=true"
+      - "traefik.http.routers.pmm-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pmm-frontend.loadbalancer.server.port=80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - internal
+      - coolify
+
+volumes:
+  pgdata:
+    name: ${POSTGRES_VOLUME_NAME:-pmm_pgdata}
+  pmm_artifacts:
+  pmm_backups:
+  pmm_logs:
+
+networks:
+  internal:
+    driver: bridge
+  coolify:
+    external: true

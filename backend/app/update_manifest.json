@@ -1,0 +1,41 @@
+{
+  "app_name": "PMM_ONLINE",
+  "latest_version": "1.0.0",
+  "min_supported_db_schema": "0009_posting_session_result_json",
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-03-05",
+      "notes": [
+        "Initial production baseline"
+      ]
+    }
+  ],
+  "images": {
+    "backend": {
+      "repo": "docker.io/your-org/pmm-backend",
+      "tag": "1.0.0"
+    },
+    "frontend": {
+      "repo": "docker.io/your-org/pmm-frontend",
+      "tag": "1.0.0"
+    },
+    "worker": {
+      "repo": "docker.io/your-org/pmm-worker",
+      "tag": "1.0.0"
+    }
+  },
+  "compose": {
+    "project_dir": "/opt/pmm",
+    "compose_file": "docker-compose.prod.yml",
+    "env_file": ".env.prod",
+    "version_env_key": "APP_VERSION",
+    "backend_image_env_key": "PMM_BACKEND_IMAGE",
+    "frontend_image_env_key": "PMM_FRONTEND_IMAGE",
+    "worker_image_env_key": "PMM_WORKER_IMAGE"
+  },
+  "security": {
+    "sha256": "",
+    "signed": false
+  }
+}

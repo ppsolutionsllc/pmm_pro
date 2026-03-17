@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * {
+      font-family: "Times New Roman", serif !important;
+    }
+
+    @page {
+      size: A4 landscape;
+      margin: 12mm 10mm 12mm 10mm;
+      @bottom-left {
+        content: "Документ сформовано автоматично";
+        font-size: 9px;
+        color: #666;
+      }
+      @bottom-right {
+        content: "Стор. " counter(page) " / " counter(pages);
+        font-size: 9px;
+        color: #666;
+      }
+    }
+
+    body {
+      font-family: "Times New Roman", serif;
+      color: #000;
+      font-size: var(--doc-font-size, 11pt);
+      font-weight: var(--doc-font-weight, 400);
+      font-style: var(--doc-font-style, normal);
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    .sheet {
+      width: 100%;
+    }
+
+    .to-line {
+      text-align: right;
+      font-size: 12pt;
+      margin-bottom: 18px;
+      font-weight: 700;
+    }
+
+    .title {
+      text-align: center;
+      font-size: 18pt;
+      font-weight: 700;
+      margin: 0 0 6px;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      margin: 0 0 10px;
+      text-align: center;
+      font-size: 12pt;
+      line-height: 1.25;
+    }
+
+    .lead .unit {
+      font-weight: 700;
+      text-transform: lowercase;
+    }
+
+    .form-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 2px solid #000;
+      margin-top: 8px;
+    }
+
+    .form-table th,
+    .form-table td {
+      border: 1px solid #000;
+      padding: 4px 6px;
+      vertical-align: middle;
+      word-break: break-word;
+    }
+
+    .form-table thead th {
+      text-align: center;
+      font-size: 10.5pt;
+      font-weight: 700;
+    }
+
+    .form-table .header-thick {
+      border: 2px solid #000;
+    }
+
+    .form-table .idx-row td {
+      text-align: center;
+      font-size: 10pt;
+      padding: 1px 2px;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+    }
+
+    .form-table .row-no {
+      text-align: center;
+      width: 38px;
+    }
+
+    .form-table .center {
+      text-align: center;
+    }
+
+    .form-table .right {
+      text-align: right;
+    }
+
+    .align-left { text-align: left; }
+    .align-center { text-align: center; }
+    .align-right { text-align: right; }
+
+    .form-table .activity-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .form-table .details {
+      line-height: 1.2;
+    }
+
+    .form-table .totals td {
+      border-top: 2px solid #000;
+      font-weight: 700;
+      font-size: 12pt;
+    }
+
+    .signatures {
+      margin-top: 16px;
+      font-size: 12pt;
+      line-height: 1.35;
+    }
+
+    .signatures .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #000;
+      margin-bottom: 6px;
+      padding-bottom: 2px;
+    }
+
+    .muted {
+      color: #333;
+      font-size: 10pt;
+    }
+
+    .service-box {
+      margin-top: 12px;
+      border: 1px solid #000;
+      padding: 8px 10px;
+      page-break-inside: avoid;
+    }
+
+    .service-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-size: 11pt;
+      text-transform: uppercase;
+    }
+
+    .service-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .service-table td {
+      border-bottom: 1px solid #000;
+      padding: 3px 4px;
+      font-size: 10.5pt;
+      vertical-align: top;
+    }
+
+    .service-table td:first-child {
+      width: 34%;
+      font-weight: 700;
+    }
+  </style>
+</head>
+{% set typography = (doc.layout.typography if doc.layout and doc.layout.typography else {}) %}
+{% set doc_font_size = typography.font_size_pt|default(11) %}
+{% set doc_text_style = typography.text_style|default('normal') %}
+{% set doc_font_weight = "700" if doc_text_style == "bold" else "400" %}
+{% set doc_font_style = "italic" if doc_text_style == "italic" else "normal" %}
+<body style="--doc-font-size: {{ doc_font_size }}pt; --doc-font-weight: {{ doc_font_weight }}; --doc-font-style: {{ doc_font_style }};">
+  <div class="sheet">
+    <div class="to-line">{{ (doc.layout.header.commander_line if doc.layout and doc.layout.header and doc.layout.header.commander_line else "Командиру військової частини A7014") }}</div>
+
+    <h1 class="title">{{ (doc.layout.header.title if doc.layout and doc.layout.header and doc.layout.header.title else "ЗАЯВКА") }}</h1>
+    <p class="lead">
+      {{ (doc.layout.header.subtitle if doc.layout and doc.layout.header and doc.layout.header.subtitle else "Прошу, Вас дати вказівку начальнику служби ПММ, що до видачі пального на бойову підготовку") }}
+      <span class="unit">{{ (doc.department.name if doc.department and doc.department.name else "підрозділу") }}</span>.
+    </p>
+
+    {% set comp = (doc["computed"] if doc["computed"] is defined else {}) %}
+    {% set cols = (doc.table.columns if doc.table and doc.table.columns else []) %}
+    {% set rows = (doc.table.rows if doc.table and doc.table.rows else []) %}
+    <table class="form-table">
+      {% if cols|length > 0 %}
+      <colgroup>
+        {% for c in cols %}
+        <col style="width: {{ c.width|default(8) }}%">
+        {% endfor %}
+      </colgroup>
+      {% endif %}
+      <thead>
+        <tr>
+          {% if cols|length == 0 %}
+          <th class="header-thick">Колонки не налаштовано</th>
+          {% else %}
+          {% for c in cols %}
+          <th
+            class="header-thick"
+            style="font-size: {{ c.font_size_pt|default(11) }}pt; font-weight: {{ '700' if c.text_style == 'bold' else '400' }}; font-style: {{ 'italic' if c.text_style == 'italic' else 'normal' }};"
+          >{{ c.title }}</th>
+          {% endfor %}
+          {% endif %}
+        </tr>
+        <tr class="idx-row">
+          {% if cols|length == 0 %}
+          <td>1</td>
+          {% else %}
+          {% for c in cols %}
+          <td>{{ loop.index }}</td>
+          {% endfor %}
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% if cols|length == 0 %}
+        <tr>
+          <td class="center">Налаштуйте колонки в шаблоні</td>
+        </tr>
+        {% elif rows|length == 0 %}
+        <tr>
+          <td class="center" colspan="{{ cols|length }}">Немає рядків</td>
+        </tr>
+        {% else %}
+        {% for row in rows %}
+        <tr>
+          {% for cell in row.cells %}
+          <td
+            class="align-{{ cell.align|default('left') }}"
+            style="font-size: {{ cell.font_size_pt|default(11) }}pt; font-weight: {{ '700' if cell.text_style == 'bold' else '400' }}; font-style: {{ 'italic' if cell.text_style == 'italic' else 'normal' }};"
+          >{{ cell.value or "—" }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+
+    <table class="form-table" style="margin-top:6px;">
+      <tbody>
+        <tr class="totals">
+          <td style="width:70%;"><strong>Усього АБ</strong></td>
+          <td class="center"><strong>{{ "%.2f"|format(comp.total_ab_liters|default(0)) }}</strong></td>
+        </tr>
+        <tr class="totals">
+          <td><strong>Усього ДП</strong></td>
+          <td class="center"><strong>{{ "%.2f"|format(comp.total_dp_liters|default(0)) }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% if doc.has_debt and ((doc.debt_ab_liters or 0) > 0 or (doc.debt_dp_liters or 0) > 0) %}
+    <div style="margin-top:6px; font-weight:700;">
+      Недовидача: АБ {{ "%.2f"|format(doc.debt_ab_liters or 0) }} л; ДП {{ "%.2f"|format(doc.debt_dp_liters or 0) }} л
+    </div>
+    {% endif %}
+
+    {% set signatures = (doc.signatures if doc.signatures else {}) %}
+    {% if not (doc.layout and doc.layout.signatures and doc.layout.signatures.show is sameas false) %}
+      <div class="signatures">
+        <div>{{ signatures.approval_title or "З розрахунком згоден:" }}</div>
+        <div class="line">
+          <span>{{ signatures.approval_position or "—" }}</span>
+          <span>{{ signatures.approval_name or "—" }}</span>
+        </div>
+
+        <div>{{ signatures.agreed_title or "ПОГОДЖЕНО:" }}</div>
+        <div class="line">
+          <span>{{ signatures.agreed_position or "—" }}</span>
+          <span>{{ signatures.agreed_name or "—" }}</span>
+        </div>
+        <div class="muted">Дата подання: {{ doc.auto_sign_date or "—" }}</div>
+      </div>
+    {% endif %}
+
+    {% if doc.service %}
+    <div class="service-box">
+      <div class="service-title">Службова інформація</div>
+      <table class="service-table">
+        <tbody>
+          {% if doc.service.show_request_number %}
+          <tr><td>Номер заявки</td><td>{{ doc.request.request_number or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_department %}
+          <tr><td>Підрозділ</td><td>{{ doc.department.name or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_status %}
+          <tr><td>Статус заявки</td><td>{{ doc.request.status or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_issue_doc_no %}
+          <tr><td>Номер акта</td><td>{{ doc.issue.issue_doc_no or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_system_version %}
+          <tr><td>Версія системи</td><td>{{ doc.system.backend_version or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_audit_users %}
+          <tr><td>Хто затвердив</td><td>{{ doc.audit.approved_by or "—" }}</td></tr>
+          <tr><td>Хто видав</td><td>{{ doc.audit.issued_by or "—" }}</td></tr>
+          <tr><td>Хто підтвердив</td><td>{{ doc.audit.confirmed_by or "—" }}</td></tr>
+          {% endif %}
+          {% if doc.service.show_generated_at %}
+          <tr><td>Сформовано</td><td>{{ doc.generated_at or "—" }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

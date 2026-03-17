@@ -1,0 +1,30 @@
+from .base import Base
+
+# import models so Alembic can detect them
+from . import (
+    user,
+    department,
+    department_print_signature,
+    vehicle,
+    vehicle_change_request,
+    planned_activity,
+    request,
+    request_item,
+    request_audit,
+    route,
+    stock,
+    settings,
+    app_settings,
+    fuel_coeff_history,
+    admin_alert,
+    admin_incident,
+    posting_session,
+    request_snapshot,
+    pdf_template,
+    stock_reservation,
+    background_job,
+    issue_doc_sequence,
+    system_meta,
+    updates_log,
+    update_step,
+)

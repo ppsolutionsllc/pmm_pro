@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: pmm
+      POSTGRES_PASSWORD: pmm
+      POSTGRES_DB: pmm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - SQL_ECHO=${SQL_ECHO:-false}
+      - FIRST_ADMIN_LOGIN=${FIRST_ADMIN_LOGIN:-}
+      - FIRST_ADMIN_PASSWORD=${FIRST_ADMIN_PASSWORD:-}
+      - FIRST_ADMIN_FULL_NAME=${FIRST_ADMIN_FULL_NAME:-First Administrator}
+    depends_on:
+      - db
+
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "alembic upgrade head"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - SQL_ECHO=${SQL_ECHO:-false}
+    depends_on:
+      - db
+    restart: "no"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    # keep source mounted for live edit but reinstall dependencies each start
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+
+volumes:
+  pgdata:
+    name: pmm_online_2mvp_db_data
