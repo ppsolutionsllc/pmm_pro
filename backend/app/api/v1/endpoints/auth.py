@@ -1,18 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.crud import user as crud_user
 from app.core import security
+from app.core.rate_limit import limiter
 from app.schemas import token as schema_token
 from app.schemas import user as schema_user
 from app.api import deps
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 @router.post("/token", response_model=schema_token.Token)
 @limiter.limit("10/minute")

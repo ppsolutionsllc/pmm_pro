@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 import json
 
@@ -183,7 +184,7 @@ async def create_real_backup(current_user=Depends(deps.require_role("ADMIN"))):
         async with async_session() as session:
             runtime_cfg = await backup_service.get_backup_runtime_config(session)
         keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
-        return backup_service.create_backup(keep_count=keep, name_prefix="pmm")
+        return await asyncio.to_thread(backup_service.create_backup, keep_count=keep, name_prefix="pmm")
     except backup_service.BackupError as exc:
         async with async_session() as session:
             async with session.begin():
@@ -200,7 +201,7 @@ async def create_real_backup(current_user=Depends(deps.require_role("ADMIN"))):
 
 @router.get("/settings/backups")
 async def list_real_backups(current_user=Depends(deps.require_role("ADMIN"))):
-    return backup_service.list_backups()
+    return await asyncio.to_thread(backup_service.list_backups)
 
 
 @router.get("/settings/backups/config")
@@ -226,7 +227,7 @@ async def set_real_backup_config(
 @router.post("/settings/backups/{filename}/verify")
 async def verify_real_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
     try:
-        return backup_service.verify_backup(filename)
+        return await asyncio.to_thread(backup_service.verify_backup, filename)
     except backup_service.BackupError as exc:
         async with async_session() as session:
             async with session.begin():
@@ -250,7 +251,7 @@ async def restore_real_backup(
     if payload.confirm.strip().upper() != "RESTORE":
         raise HTTPException(status_code=400, detail="Для відновлення введіть confirm=RESTORE")
     try:
-        return backup_service.restore_backup(filename)
+        return await asyncio.to_thread(backup_service.restore_backup, filename)
     except backup_service.BackupError as exc:
         async with async_session() as session:
             async with session.begin():
@@ -274,7 +275,8 @@ async def upload_real_backup(
         async with async_session() as session:
             runtime_cfg = await backup_service.get_backup_runtime_config(session)
         keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
-        return backup_service.save_uploaded_backup(
+        return await asyncio.to_thread(
+            backup_service.save_uploaded_backup,
             file.file,
             file.filename,
             keep_count=keep,
@@ -306,13 +308,14 @@ async def upload_and_restore_real_backup(
         async with async_session() as session:
             runtime_cfg = await backup_service.get_backup_runtime_config(session)
         keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
-        uploaded = backup_service.save_uploaded_backup(
+        uploaded = await asyncio.to_thread(
+            backup_service.save_uploaded_backup,
             file.file,
             file.filename,
             keep_count=keep,
             name_prefix="pmm_import",
         )
-        restored = backup_service.restore_backup(str(uploaded.get("filename")))
+        restored = await asyncio.to_thread(backup_service.restore_backup, str(uploaded.get("filename")))
         return {"uploaded": uploaded, "restored": restored}
     except backup_service.BackupError as exc:
         async with async_session() as session:
@@ -331,7 +334,7 @@ async def upload_and_restore_real_backup(
 @router.delete("/settings/backups/{filename}")
 async def delete_real_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
     try:
-        return backup_service.delete_backup(filename)
+        return await asyncio.to_thread(backup_service.delete_backup, filename)
     except backup_service.BackupError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -339,7 +342,7 @@ async def delete_real_backup(filename: str, current_user=Depends(deps.require_ro
 @router.get("/settings/backups/{filename}/download")
 async def download_real_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
     try:
-        path = backup_service.resolve_backup_path(filename)
+        path = await asyncio.to_thread(backup_service.resolve_backup_path, filename)
     except backup_service.BackupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return FileResponse(path=str(path), filename=path.name)

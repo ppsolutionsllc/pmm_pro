@@ -12,7 +12,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(60 * 24, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"], alias="CORS_ORIGINS")
+    allowed_hosts: list[str] = Field(default_factory=lambda: ["*"], alias="ALLOWED_HOSTS")
+    enable_security_headers: bool = Field(True, alias="ENABLE_SECURITY_HEADERS")
     sql_echo: bool = Field(False, alias="SQL_ECHO")
+    db_pool_size: int = Field(10, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(20, alias="DB_MAX_OVERFLOW")
+    db_pool_timeout_seconds: int = Field(30, alias="DB_POOL_TIMEOUT_SECONDS")
+    db_pool_recycle_seconds: int = Field(1800, alias="DB_POOL_RECYCLE_SECONDS")
+    db_connect_timeout_seconds: int = Field(10, alias="DB_CONNECT_TIMEOUT_SECONDS")
     first_admin_login: str = Field("", alias="FIRST_ADMIN_LOGIN")
     first_admin_password: str = Field("", alias="FIRST_ADMIN_PASSWORD")
     first_admin_full_name: str = Field("First Administrator", alias="FIRST_ADMIN_FULL_NAME")
@@ -74,6 +81,23 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def parse_allowed_hosts(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return ["*"]
+            if value.startswith("["):
+                try:
+                    parsed = json.loads(value)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except json.JSONDecodeError:
+                    pass
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
     @field_validator("allowed_image_repos", mode="before")
     @classmethod
     def parse_allowed_image_repos(cls, value):
@@ -97,5 +121,18 @@ class Settings(BaseSettings):
                 "This deployment is PostgreSQL-only. Set DATABASE_URL to postgresql+..."
             )
         return value
+
+    @field_validator(
+        "db_pool_size",
+        "db_max_overflow",
+        "db_pool_timeout_seconds",
+        "db_pool_recycle_seconds",
+        "db_connect_timeout_seconds",
+    )
+    @classmethod
+    def validate_positive_pool_values(cls, value: int) -> int:
+        if int(value) < 1:
+            raise ValueError("Database pool settings must be >= 1")
+        return int(value)
 
 settings = Settings()

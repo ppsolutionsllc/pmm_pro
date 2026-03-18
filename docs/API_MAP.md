@@ -97,6 +97,8 @@
 ## 8) Health
 | Endpoint | Назначение |
 |---|---|
+| `/health` | Liveness (процесс жив) |
+| `/ready` | Readiness (проверка БД `SELECT 1`) |
 | `/healthz` | Liveness (процесс жив) |
 | `/readyz` | Readiness (проверка БД `SELECT 1`) |
 

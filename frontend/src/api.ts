@@ -1,4 +1,5 @@
-const BASE = '/api/v1';
+const API_ROOT = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const BASE = API_ROOT ? `${API_ROOT}/api/v1` : '/api/v1';
 
 function getToken(): string | null {
   return sessionStorage.getItem('token');

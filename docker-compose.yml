@@ -16,6 +16,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    user: "0:0"
     volumes:
       - ./backend:/app
     ports:
@@ -24,7 +25,14 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
       - SQL_ECHO=${SQL_ECHO:-false}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-20}
+      - DB_POOL_TIMEOUT_SECONDS=${DB_POOL_TIMEOUT_SECONDS:-30}
+      - DB_POOL_RECYCLE_SECONDS=${DB_POOL_RECYCLE_SECONDS:-1800}
+      - DB_CONNECT_TIMEOUT_SECONDS=${DB_CONNECT_TIMEOUT_SECONDS:-10}
       - FIRST_ADMIN_LOGIN=${FIRST_ADMIN_LOGIN:-}
       - FIRST_ADMIN_PASSWORD=${FIRST_ADMIN_PASSWORD:-}
       - FIRST_ADMIN_FULL_NAME=${FIRST_ADMIN_FULL_NAME:-First Administrator}
@@ -36,11 +44,19 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: sh -c "alembic upgrade head"
+    user: "0:0"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
       - SQL_ECHO=${SQL_ECHO:-false}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-20}
+      - DB_POOL_TIMEOUT_SECONDS=${DB_POOL_TIMEOUT_SECONDS:-30}
+      - DB_POOL_RECYCLE_SECONDS=${DB_POOL_RECYCLE_SECONDS:-1800}
+      - DB_CONNECT_TIMEOUT_SECONDS=${DB_CONNECT_TIMEOUT_SECONDS:-10}
     depends_on:
       - db
     restart: "no"
@@ -56,7 +72,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_DEV_PROXY_TARGET=http://backend:8000
 
 volumes:
   pgdata:
