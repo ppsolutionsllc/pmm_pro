@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -107,18 +108,44 @@ class Settings(BaseSettings):
     @field_validator("allowed_hosts", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, value):
+        def _normalize_host(raw: str) -> str:
+            token = (raw or "").strip().lower()
+            if not token:
+                return ""
+            if token == "*":
+                return token
+            if "://" in token:
+                parsed = urlparse(token)
+                token = (parsed.netloc or parsed.path or "").strip().lower()
+            token = token.split("/", 1)[0].strip()
+            return token
+
+        def _ensure_local_health_hosts(hosts: list[str]) -> list[str]:
+            if "*" in hosts:
+                return ["*"]
+            required = ["localhost", "127.0.0.1"]
+            out = list(hosts)
+            for host in required:
+                if host not in out:
+                    out.append(host)
+            return out
+
         if isinstance(value, str):
             value = value.strip()
             if not value:
-                return []
+                return _ensure_local_health_hosts([])
             if value.startswith("["):
                 try:
                     parsed = json.loads(value)
                     if isinstance(parsed, list):
-                        return [str(item).strip() for item in parsed if str(item).strip()]
+                        cleaned = [_normalize_host(str(item)) for item in parsed if str(item).strip()]
+                        cleaned = [item for item in cleaned if item]
+                        return _ensure_local_health_hosts(cleaned)
                 except json.JSONDecodeError:
                     pass
-            return [item.strip() for item in value.split(",") if item.strip()]
+            cleaned = [_normalize_host(item) for item in value.split(",") if item.strip()]
+            cleaned = [item for item in cleaned if item]
+            return _ensure_local_health_hosts(cleaned)
         return value
 
     @field_validator("allowed_image_repos", mode="before")
