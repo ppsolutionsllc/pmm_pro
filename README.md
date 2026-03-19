@@ -62,6 +62,11 @@ docker compose up --build
 - `POSTGRES_PASSWORD` (secret)
 - `JWT_SECRET` (secret, 32+ chars)
 
+Критично для deploy:
+- `JWT_SECRET` задається вручну в Coolify (`Secrets`/`Environment Variables`).
+- Placeholder-значення не підходять і спеціально відхиляються backend-валидацією.
+- Якщо `JWT_SECRET` не заданий коректно (або < 32 символів), backend не стартує.
+
 Швидкі посилання:
 - [DEPLOY_COOLIFY.md](docs/DEPLOY_COOLIFY.md)
 - [RUNBOOK.md](docs/RUNBOOK.md)

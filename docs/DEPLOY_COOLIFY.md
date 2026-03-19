@@ -17,6 +17,14 @@
 - `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`
 - `ALLOWED_HOSTS=pmm.66br.pp.ua`
 
+## Critical: JWT_SECRET (MANUAL ACTION REQUIRED)
+- `JWT_SECRET` обов'язково задати вручну в `Coolify -> Secrets` (або `Environment Variables`).
+- Мінімальна довжина: `32` символи.
+- Placeholder-значення (наприклад `Set JWT_SECRET`, `replace-with...`, `MANUAL_ACTION_REQUIRED...`) заборонені.
+- Якщо залишити placeholder або короткий секрет, `backend` не запуститься і deploy зупиниться на unhealthy статусі.
+- Рекомендація для генерації:
+  - `openssl rand -hex 32`
+
 Рекомендовані значення:
 - `DOMAIN=pmm.66br.pp.ua`
 - `PRINT_QR_TARGET_URL=https://pmm.66br.pp.ua`

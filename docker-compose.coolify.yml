@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pmm}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?MANUAL_ACTION_REQUIRED__SET_POSTGRES_PASSWORD_IN_COOLIFY_SECRET}
       POSTGRES_DB: ${POSTGRES_DB:-pmm}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -24,7 +24,7 @@ services:
     command: ["/app/scripts/start-backend.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?MANUAL_ACTION_REQUIRED__SET_JWT_SECRET_IN_COOLIFY_SECRET__MIN_32_CHARS}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}

@@ -57,9 +57,28 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
-        if len(value.strip()) < 32:
-            raise ValueError("JWT_SECRET must be at least 32 characters long")
-        return value
+        candidate = value.strip()
+        lowered = candidate.lower()
+        placeholder_markers = (
+            "set jwt secret",
+            "replace-with",
+            "replace_me",
+            "manual_action_required",
+            "change-me",
+            "changeme",
+            "your-jwt-secret",
+        )
+        if any(marker in lowered for marker in placeholder_markers):
+            raise ValueError(
+                "JWT_SECRET is not configured for production. Set a real secret in Coolify "
+                "Secrets/Environment Variables (32+ chars). Placeholder values are not allowed."
+            )
+        if len(candidate) < 32:
+            raise ValueError(
+                "JWT_SECRET is too short. Set a real secret in Coolify "
+                "Secrets/Environment Variables (minimum 32 characters)."
+            )
+        return candidate
 
     @field_validator("first_admin_password")
     @classmethod
