@@ -32,8 +32,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env.prod}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in .env.prod}
       ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
       SQL_ECHO: ${SQL_ECHO:-false}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
@@ -44,10 +44,11 @@ services:
       FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
       FIRST_ADMIN_FULL_NAME: ${FIRST_ADMIN_FULL_NAME:-First Administrator}
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?Set FRONTEND_BASE_URL in .env.prod}
+      PRINT_QR_TARGET_URL: ${PRINT_QR_TARGET_URL:-https://pmm.66br.pp.ua}
       BACKEND_VERSION: ${APP_VERSION:-dev}
       FRONTEND_VERSION: ${APP_VERSION:-dev}
-      UPDATE_GITHUB_REPO: ${UPDATE_GITHUB_REPO:?Set UPDATE_GITHUB_REPO in .env.prod}
+      UPDATE_GITHUB_REPO: ${UPDATE_GITHUB_REPO:-}
       UPDATE_GITHUB_TOKEN: ${UPDATE_GITHUB_TOKEN:-}
       REQUIRE_SIGNED_TAGS: ${REQUIRE_SIGNED_TAGS:-false}
       UPDATE_CHECK_CACHE_TTL_SECONDS: ${UPDATE_CHECK_CACHE_TTL_SECONDS:-300}
@@ -73,7 +74,11 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)\""]
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os, urllib.request; host=(os.getenv('ALLOWED_HOSTS','').split(',')[0].strip() or 'localhost'); req=urllib.request.Request('http://127.0.0.1:8000/ready', headers={'Host': host}); urllib.request.urlopen(req, timeout=3)\"",
+        ]
       interval: 15s
       timeout: 5s
       retries: 6
@@ -88,8 +93,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.prod}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env.prod}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in .env.prod}
       ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
       SQL_ECHO: ${SQL_ECHO:-false}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
@@ -110,7 +115,7 @@ services:
       - "80"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.pmm-frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.pmm-frontend.rule=Host(`${DOMAIN:?Set DOMAIN in .env.prod}`)"
       - "traefik.http.routers.pmm-frontend.entrypoints=https"
       - "traefik.http.routers.pmm-frontend.tls=true"
       - "traefik.http.routers.pmm-frontend.tls.certresolver=letsencrypt"
@@ -119,7 +124,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 6

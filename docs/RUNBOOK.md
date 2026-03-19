@@ -5,6 +5,9 @@
 ## 1) Health / readiness
 - Liveness: `GET /health`
 - Readiness: `GET /ready`
+- Через frontend proxy:
+  - `GET /health`
+  - `GET /ready`
 
 Очікуване:
 - `/health` -> `{"ok": true}`
@@ -69,5 +72,7 @@
 ## 7) Безпечні операційні дефолти
 - `RUN_MIGRATIONS=true` у production (один backend instance).
 - `ENABLE_SECURITY_HEADERS=true`.
-- `ALLOWED_HOSTS` обмежити production доменом.
+- `ALLOWED_HOSTS=pmm.66br.pp.ua`.
+- `CORS_ORIGINS=https://pmm.66br.pp.ua`.
+- `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`.
 - Не публікувати `backend`/`db` в інтернет.

@@ -12,6 +12,7 @@ services:
       - "5432:5432"
 
   backend:
+    image: ${PMM_DEV_BACKEND_IMAGE:-pmm-online-backend-dev:local}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -40,6 +41,7 @@ services:
       - db
 
   migrator:
+    image: ${PMM_DEV_BACKEND_IMAGE:-pmm-online-backend-dev:local}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -62,6 +64,7 @@ services:
     restart: "no"
 
   frontend:
+    image: ${PMM_DEV_FRONTEND_IMAGE:-pmm-online-frontend-dev:local}
     build:
       context: ./frontend
       dockerfile: Dockerfile

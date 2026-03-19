@@ -52,7 +52,15 @@ docker compose up --build
 - OpenAPI: `http://localhost:8000/docs`
 
 ## Production / Coolify
-Використовуйте `docker-compose.coolify.yml`.
+Використовуйте тільки `docker-compose.coolify.yml` як source of truth для production deploy у Coolify.
+Цільовий домен: `https://pmm.66br.pp.ua`.
+
+Ключові production env:
+- `CORS_ORIGINS=https://pmm.66br.pp.ua`
+- `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`
+- `ALLOWED_HOSTS=pmm.66br.pp.ua`
+- `POSTGRES_PASSWORD` (secret)
+- `JWT_SECRET` (secret, 32+ chars)
 
 Швидкі посилання:
 - [DEPLOY_COOLIFY.md](docs/DEPLOY_COOLIFY.md)

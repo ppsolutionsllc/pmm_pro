@@ -12,7 +12,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(60 * 24, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"], alias="CORS_ORIGINS")
-    allowed_hosts: list[str] = Field(default_factory=lambda: ["*"], alias="ALLOWED_HOSTS")
+    allowed_hosts: list[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1", "backend", "frontend"],
+        alias="ALLOWED_HOSTS",
+    )
     enable_security_headers: bool = Field(True, alias="ENABLE_SECURITY_HEADERS")
     sql_echo: bool = Field(False, alias="SQL_ECHO")
     db_pool_size: int = Field(10, alias="DB_POOL_SIZE")
@@ -88,7 +91,7 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             value = value.strip()
             if not value:
-                return ["*"]
+                return []
             if value.startswith("["):
                 try:
                     parsed = json.loads(value)

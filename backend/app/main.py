@@ -63,11 +63,16 @@ stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 _attach_handler(root, stream_handler, "stdout_handler")
 
 log_file_path = Path(settings.posting_error_log_path).parent / "app.log"
-log_file_path.parent.mkdir(parents=True, exist_ok=True)
-file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-_attach_handler(root, file_handler, "file_handler")
+try:
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    _attach_handler(root, file_handler, "file_handler")
+except OSError as exc:
+    root.warning("File logging disabled for %s: %s", log_file_path, exc)
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +81,15 @@ posting_logger = logging.getLogger("app.posting")
 posting_logger.setLevel(logging.INFO)
 if not any(isinstance(h, logging.FileHandler) for h in posting_logger.handlers):
     posting_log_path = Path(settings.posting_error_log_path)
-    posting_log_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.FileHandler(posting_log_path, encoding="utf-8")
-    fh.setLevel(logging.ERROR)
-    fh.setFormatter(logging.Formatter(LOG_FORMAT))
-    fh.addFilter(RequestIdFilter())
-    posting_logger.addHandler(fh)
+    try:
+        posting_log_path.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(posting_log_path, encoding="utf-8")
+        fh.setLevel(logging.ERROR)
+        fh.setFormatter(logging.Formatter(LOG_FORMAT))
+        fh.addFilter(RequestIdFilter())
+        posting_logger.addHandler(fh)
+    except OSError as exc:
+        root.warning("Posting file logging disabled for %s: %s", posting_log_path, exc)
 
 
 @asynccontextmanager

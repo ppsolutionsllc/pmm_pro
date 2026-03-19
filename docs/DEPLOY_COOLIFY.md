@@ -1,42 +1,54 @@
-# Deploy Guide: Coolify
+# Deploy Guide: Coolify (Production)
 
-Цей гайд описує рекомендований деплой через `docker-compose.coolify.yml`.
+Цільовий production-домен: `pmm.66br.pp.ua`.
 
-## 1) Що використовувати
+## 1) Source Of Truth
 - Compose file: `docker-compose.coolify.yml`
-- Env template: `.env.prod.example` (скопіювати в Coolify Variables/Secrets)
+- Branch: production/release branch з GitHub (рекомендовано `main`)
+- Env template: `.env.prod.example`
+- Публічний сервіс: `frontend`
+- Target port: `80`
 
-## 2) Мінімально обов'язкові env
+## 2) Обов'язкові ENV у Coolify
+Заповнити вручну:
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET` (мінімум 32 символи)
-- `CORS_ORIGINS` (наприклад `https://app.example.com`)
-- `FRONTEND_BASE_URL` (наприклад `https://app.example.com`)
+- `CORS_ORIGINS=https://pmm.66br.pp.ua`
+- `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`
+- `ALLOWED_HOSTS=pmm.66br.pp.ua`
 
-Рекомендовано також:
-- `ALLOWED_HOSTS=app.example.com`
+Рекомендовані значення:
+- `DOMAIN=pmm.66br.pp.ua`
+- `PRINT_QR_TARGET_URL=https://pmm.66br.pp.ua`
 - `ENABLE_SECURITY_HEADERS=true`
 - `RUN_MIGRATIONS=true`
 - `BACKEND_WORKERS=3`
 
-## 3) Створення Stack у Coolify
-1. Створити новий Docker Compose stack.
-2. Вставити вміст `docker-compose.coolify.yml`.
-3. Додати env variables (з `.env.prod.example`).
-4. Налаштувати public domain на сервіс `frontend` (порт `80`).
-5. Запустити Deploy.
+## 3) Coolify Click-Path
+1. `New` -> `Project` (або existing project).
+2. `Add New Resource` -> `Docker Compose`.
+3. Підключити GitHub repository.
+4. Вказати branch для production deploy.
+5. `Compose Path`: `docker-compose.coolify.yml`.
+6. Відкрити `Environment Variables` і заповнити обов'язкові змінні з розділу вище.
+7. Для ресурсу `frontend` увімкнути public access:
+8. `Domain` -> додати `pmm.66br.pp.ua`.
+9. `Port` -> `80`.
+10. `Deploy`.
 
-Примітка:
-- `backend` та `db` не публікувати назовні.
-- `frontend` має бути єдиною публічною точкою входу.
+## 4) Що деплоїться назовні
+- Публікується тільки `frontend`.
+- `backend` та `db` не мають зовнішніх `ports` і доступні тільки всередині docker network.
 
-## 4) Міграції
-- За замовчуванням `RUN_MIGRATIONS=true` і backend застосує `alembic upgrade head` на старті.
-- Якщо потрібен manual режим:
-  - `RUN_MIGRATIONS=false`
-  - виконувати міграції окремою командою в backend container.
+## 5) Перший Deploy
+1. Запустити deploy stack.
+2. Дочекатися `healthy` стану `db`, `backend`, `frontend`.
+3. Перевірити:
+   - `https://pmm.66br.pp.ua/health`
+   - `https://pmm.66br.pp.ua/ready`
 
-## 5) Перший admin
-Після першого деплою виконайте одноразово в backend container:
+## 6) Перший Адміністратор
+Після першого успішного deploy виконати одноразово в контейнері `backend`:
 
 ```bash
 python -m app.cli create-first-admin \
@@ -45,33 +57,37 @@ python -m app.cli create-first-admin \
   --full-name 'System Admin'
 ```
 
-Команда безпечна:
-- не створює дублікати, якщо ADMIN вже існує;
-- не запускається автоматично.
+CLI не створює дублікати (якщо ADMIN вже існує, команда завершується без змін).
 
-## 6) Post-deploy checks
-Виконати перевірки:
-1. `GET /health` -> `200 {"ok": true}`
-2. `GET /ready` -> `200 {"ok": true, "db": "ok"}`
-3. Вхід у UI, авторизація admin.
-4. Створення тестового чернеткового запиту.
-5. Перевірка `Admin -> Logs`, що немає критичних runtime errors.
+## 7) Redeploy
+- Через Coolify: `Deploy` на цьому ж ресурсі після нового commit/tag.
+- Для forced restart без змін коду: `Redeploy` або `Restart`.
 
-## 7) Rollback strategy
-1. Зберігати попередній image tag/commit.
-2. При невдалому релізі повернути попередній stack revision у Coolify.
-3. Якщо міграція вже застосована:
-   - rollback БД тільки з перевіреного backup;
-   - перед rollback обов'язково freeze write-трафіку.
+## 8) Логи та діагностика
+- Основні логи: вкладка `Logs` у Coolify по сервісах `frontend`, `backend`, `db`.
+- Швидкі перевірки:
+  - якщо `frontend` unhealthy -> перевірити nginx startup/build.
+  - якщо `backend` unhealthy -> перевірити міграції/підключення до БД.
+  - якщо `db` unhealthy -> перевірити `POSTGRES_PASSWORD`, volume, disk space.
 
-## 8) Persistent data
-Зберігати як persistent volumes:
-- `pgdata` — Postgres data.
-- `pmm_artifacts` — артефакти генерацій.
-- `pmm_backups` — backup dumps.
-- `pmm_logs` — файлові логи застосунку.
+## 9) Якщо deploy неуспішний
+1. Відкрити `Logs` проблемного сервісу.
+2. Перевірити, що всі required env задані.
+3. Перевірити health:
+   - `frontend`: `/health`
+   - `backend`: `/ready` (проксіюється через `frontend`)
+4. Виправити env/конфіг і зробити redeploy.
 
-## 9) Security notes
-- Не відкривати `db` порт назовні.
-- Не використовувати `ALLOWED_HOSTS=*` у проді.
-- Ротація секретів (`JWT_SECRET`, `POSTGRES_PASSWORD`) за політикою організації.
+## 10) Rollback (коротко)
+1. Обрати попередній стабільний commit/branch.
+2. Запустити redeploy на попередню ревізію.
+3. Якщо були міграції:
+   - використовувати тільки перевірений backup перед rollback БД.
+   - призупинити write-операції на час rollback.
+
+## 11) Persistent Data
+У стеку використовуються named volumes:
+- `pgdata` — Postgres data
+- `pmm_artifacts` — PDF/артефакти
+- `pmm_backups` — backup dumps
+- `pmm_logs` — файлові логи backend (додатково до stdout/stderr)

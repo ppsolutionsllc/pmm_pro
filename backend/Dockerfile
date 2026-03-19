@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    XDG_CACHE_HOME=/tmp/.cache
 
 # Runtime deps:
 # - WeasyPrint native libraries
@@ -34,7 +35,10 @@ COPY ./alembic.ini /app/alembic.ini
 COPY ./scripts /app/scripts
 
 RUN addgroup --system app && adduser --system --ingroup app app \
-    && chown -R app:app /app \
+    && mkdir -p /var/lib/pmm/artifacts /var/lib/pmm/backups /var/log/pmm \
+    && mkdir -p /tmp/.cache/fontconfig \
+    && touch /var/lib/pmm/artifacts/.keep /var/lib/pmm/backups/.keep /var/log/pmm/.keep \
+    && chown -R app:app /app /var/lib/pmm /var/log/pmm /tmp/.cache \
     && chmod +x /app/scripts/*.sh
 
 USER app

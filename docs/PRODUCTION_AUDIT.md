@@ -1,120 +1,92 @@
 # Production Audit Report
 
-Дата аудиту: 2026-03-18  
-Репозиторій: `PMM_ONLINE`
+Дата аудиту: 2026-03-19  
+Репозиторій: `PMM_ONLINE`  
+Target deploy: Coolify + `pmm.66br.pp.ua`
 
-## 1) Scope
-- Backend runtime (FastAPI, DB sessions, error handling, security baseline).
-- Frontend runtime/build (Vite, nginx reverse-proxy mode).
-- Docker/Compose deployment paths (dev/prod/Coolify).
-- ENV configuration consistency and deployment UX.
-- Smoke checks and operational documentation.
+## 1) Summary
+Статус готовності: `READY WITH MANUAL ACTIONS`.
 
-## 2) Findings (prioritized)
+Базовий production deploy через Coolify підготовлено:
+- `docker-compose.coolify.yml` є основним source of truth.
+- назовні публікується тільки `frontend`.
+- `backend` і `db` лишаються внутрішніми сервісами.
+- health/readiness, міграції, env-шаблон та docs синхронізовані.
+
+## 2) Findings (severity)
 
 ## Critical
-1. Відсутня окрема production-ready конфігурація для Coolify.
-   - Ризик: нестабільний деплой, ручні костилі, високий шанс збоїв на першому запуску.
-   - Статус: fixed (`docker-compose.coolify.yml`).
-2. Тестовий контур backend падав під час колекції (`httpx` відсутній).
-   - Ризик: smoke-тести не запускаються, CI/локальна перевірка неповна.
-   - Статус: fixed (`backend/requirements.txt`).
+1. Небезпечні production fallback-и у compose (`ALLOWED_HOSTS=*`, `localhost` origins/urls).
+   - Ризик: host-header bypass, CORS помилки, помилковий прод-конфіг.
+   - Статус: fixed.
+2. Ризик падіння backend при недоступному файловому логуванні (permissions у volume).
+   - Ризик: backend crash при старті через `RotatingFileHandler`.
+   - Статус: fixed (graceful fallback на stdout/stderr, warning у лог).
 
 ## High
-1. Backend логування було орієнтовано переважно на файли, без request-correlation.
-   - Ризик: слабка діагностика інцидентів у контейнерному середовищі.
-   - Статус: fixed (stdout logging + request_id filter + `X-Request-ID`).
-2. Відсутня нормалізація глобальних помилок API та єдиного формату 5xx.
-   - Ризик: витік внутрішніх деталей/непередбачувані відповіді.
-   - Статус: fixed (exception handlers у `app/main.py`).
-3. Відсутні security headers на API та frontend nginx.
-   - Ризик: гірший baseline security posture.
-   - Статус: fixed (middleware + nginx headers).
-4. Blocking I/O (`pg_dump` / `pg_restore` / файлові операції) у async endpoints.
-   - Ризик: блокування event loop під навантаженням.
-   - Статус: fixed (`asyncio.to_thread` у backup endpoints).
+1. ALLOWED_HOSTS не був обов'язковим для Coolify stack.
+   - Ризик: запуск без trusted host validation.
+   - Статус: fixed (`docker-compose.coolify.yml` -> required env).
+2. Доменні значення були не нормалізовані під production домен.
+   - Ризик: конфігураційний дрейф між кодом/env/docs.
+   - Статус: fixed (`.env.prod.example`, docs, checks).
+3. Потенційна проблема прав доступу до persistent runtime директорій.
+   - Ризик: неможливість писати артефакти/бекупи/логи у проді.
+   - Статус: fixed (`backend/Dockerfile`, `start-backend.sh` preflight checks).
+4. Backend healthcheck був несумісний з strict `ALLOWED_HOSTS`.
+   - Ризик: backend позначався unhealthy (`400` на `/ready`) при правильному production host whitelist.
+   - Статус: fixed (healthcheck надсилає коректний `Host` header).
 
 ## Medium
-1. Docker images використовували bleeding-edge Node 24 для runtime/build.
-   - Ризик: нестабільність та несумісності.
-   - Статус: fixed (Node 20 LTS у Dockerfile).
-2. Непрозорі env-вимоги та розсинхрон між code/compose/docs.
-   - Ризик: помилки конфігурації при деплої.
-   - Статус: fixed (оновлені `.env*.example`, README, deployment docs).
-3. Відсутні documented smoke checks.
-   - Ризик: регресії помічаються пізно.
-   - Статус: fixed (`scripts/smoke-checks.sh`, `Makefile`).
+1. Легасі `docker-compose.prod.yml` суперечив secure defaults.
+   - Ризик: помилкове використання insecure значень.
+   - Статус: fixed (required vars + без wildcard/localhost defaults).
+2. Smoke/check scripts не перевіряли нові required env для compose.
+   - Ризик: false-positive перевірки.
+   - Статус: fixed (`Makefile`, `scripts/smoke-checks.sh`).
+3. Колізія локальних image names між `docker-compose.yml` та `docker-compose.coolify.yml`.
+   - Ризик: dev frontend image (Vite) міг підхоплюватись у coolify-стеку під час локальної валідації.
+   - Статус: fixed (розділено image names для dev/coolify stack).
 
 ## Low
-1. Відсутність `/health` і `/ready` alias-ів (тільки `/healthz`, `/readyz`).
-   - Ризик: зайва інтеграційна неоднорідність.
-   - Статус: fixed (додані alias-и, legacy endpoints збережено).
-2. Невизначений локальний frontend proxy target поза Docker.
-   - Ризик: `npm run dev` може не знаходити backend.
-   - Статус: fixed (`VITE_DEV_PROXY_TARGET` + fallback на localhost).
+1. Наявність legacy deploy path (`docker-compose.prod.yml`) може вводити в оману.
+   - Ризик: оператор може обрати не той файл.
+   - Статус: mitigated (docs вказують єдиний цільовий файл для Coolify).
 
-## 3) Remediation summary
+## 3) Fixes Applied
+- Hardened `docker-compose.coolify.yml`:
+  - `ALLOWED_HOSTS` зроблено required.
+  - додано `PRINT_QR_TARGET_URL` з production default.
+  - `frontend` переведено на `expose: 80` (без host port bind у compose).
+  - додано унікальні image names для уникнення конфліктів з dev-стеком.
+  - backend healthcheck переведено на перевірку з коректним `Host` header.
+- Hardened `docker-compose.prod.yml` (legacy path):
+  - прибрано insecure fallback-и для `CORS_ORIGINS`, `ALLOWED_HOSTS`, `FRONTEND_BASE_URL`, `DOMAIN`.
+  - healthchecks узгоджено з `/ready` і `/health`.
+- Updated `docker-compose.yml` (dev path):
+  - додано окремі image names для backend/frontend/migrator, щоб dev і coolify не перезаписували одне одного.
+- Hardened backend startup/runtime:
+  - preflight writable checks для artifacts/backups/log dir (`start-backend.sh`).
+  - graceful degradation при недоступному file logging (`app/main.py`).
+  - secure defaults для `ALLOWED_HOSTS` parsing (`app/config.py`).
+  - runtime dir ownership у Docker image (`backend/Dockerfile`).
+- Normalized production env and docs:
+  - `.env.prod.example` орієнтовано на `pmm.66br.pp.ua`.
+  - детальний Coolify deployment guide оновлено.
+  - smoke/config checks синхронізовано з required vars.
 
-## Infrastructure / deployment
-- Додано `docker-compose.coolify.yml`:
-  - healthchecks для `db`, `backend`, `frontend`;
-  - required env guardrails (`${VAR:?Set VAR}`);
-  - persistent volumes для БД, backup/artifacts/logs;
-  - production command для backend через entrypoint script.
-- Додано `backend/scripts/start-backend.sh`:
-  - опціональний автозапуск міграцій (`RUN_MIGRATIONS=true`);
-  - старт gunicorn/uvicorn worker.
-- Оновлено Dockerfiles:
-  - backend: non-root runtime user, `tini`, minimal runtime packages.
-  - frontend: Node 20 LTS.
+## 4) Manual Actions Required
+1. Заповнити production secrets у Coolify:
+   - `POSTGRES_PASSWORD`
+   - `JWT_SECRET`
+2. Встановити production env values:
+   - `CORS_ORIGINS=https://pmm.66br.pp.ua`
+   - `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`
+   - `ALLOWED_HOSTS=pmm.66br.pp.ua`
+3. Прив'язати домен `pmm.66br.pp.ua` до сервісу `frontend` на порту `80`.
+4. Одноразово створити першого адміністратора через backend CLI.
 
-## Backend runtime/security
-- Request correlation:
-  - `X-Request-ID` для кожного запиту;
-  - request-id у логах (stdout/file/memory handlers).
-- Error handling:
-  - глобальні handlers для `HTTPException`, validation errors, unhandled exceptions.
-  - у 5xx повертається safe message без stack trace.
-- Security baseline:
-  - security headers middleware (керується `ENABLE_SECURITY_HEADERS`);
-  - optional trusted hosts (`ALLOWED_HOSTS`).
-- DB runtime config:
-  - pool settings винесено в env (`DB_POOL_*`, `DB_CONNECT_TIMEOUT_SECONDS`).
-- Backup endpoints:
-  - переведені на `asyncio.to_thread` для уникнення event-loop blocking.
-- Rate-limit:
-  - уніфікований limiter singleton (`app/core/rate_limit.py`).
-
-## Frontend/runtime
-- API base:
-  - підтримка `VITE_API_URL` для direct API mode;
-  - fallback на same-origin `/api/v1`.
-- Dev proxy:
-  - `VITE_DEV_PROXY_TARGET` з fallback `http://localhost:8000`.
-- nginx:
-  - `/health` endpoint;
-  - security headers.
-
-## DX / checks / docs
-- Додано:
-  - `scripts/smoke-checks.sh`
-  - `Makefile` (`make check`, `make smoke`)
-  - `docs/DEPLOY_COOLIFY.md`
-  - `docs/RUNBOOK.md`
-- Оновлено:
-  - `README.md`
-  - `docs/API_MAP.md`
-  - `.env.example`, `.env.prod.example`, `.env.backend.example`, `.env.frontend.example`
-
-## 4) Verification performed
-- `python3 -m compileall backend/app` -> OK.
-- `make check-compose` -> OK.
-- `docker compose run --rm --no-deps frontend npm run build` -> OK.
-- `docker compose run --rm --no-deps backend pytest -q` -> `1 skipped` (очікувано, без `TEST_DATABASE_URL`).
-- `./scripts/smoke-checks.sh` -> OK (pytest block skipped без test DB).
-
-## 5) Remaining risks / deferred items
-1. Немає повноцінного CI pipeline у репозиторії (авто-checks/auto-build/auto-test).
-2. Інтеграційні backend тести залежать від `TEST_DATABASE_URL`; без test DB покривається лише syntax/build/compose.
-3. Frontend bundle великий (Vite warning > 500KB), потрібне code-splitting у наступному циклі.
-4. Update subsystem (`update_service`) все ще складний та потребує окремого hardening/ops policy для прод-середовищ, де Docker-in-Docker заборонений.
+## 5) Known Limitations
+1. Немає повного CI pipeline (lint/test/build/deploy gates).
+2. Backend інтеграційні smoke-тести повністю працюють тільки за наявності `TEST_DATABASE_URL`.
+3. Update subsystem потребує окремої ops-політики (доступ до docker/host на прод-сервері).
