@@ -31,7 +31,15 @@ const adminNav: NavItem[] = [
     ],
   },
   { to: '/admin/incidents', label: 'Інциденти', icon: <ShieldAlert size={18} /> },
-  { to: '/admin/reports/vehicles', label: 'Звіт ТЗ', icon: <BarChart3 size={18} /> },
+  {
+    to: '/admin/reports/vehicles',
+    label: 'Звіти',
+    icon: <BarChart3 size={18} />,
+    children: [
+      { to: '/admin/reports/vehicles', label: 'Звіт ТЗ', icon: <BarChart3 size={18} /> },
+      { to: '/admin/reports/departments', label: 'Звіт по підрозділах', icon: <Building2 size={18} /> },
+    ],
+  },
   {
     to: '/admin/references',
     label: 'Довідники',

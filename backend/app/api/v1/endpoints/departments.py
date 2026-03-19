@@ -112,17 +112,29 @@ async def get_department_print_signatures(
 @router.put("/departments/{dept_id}/print-signatures", response_model=schema_dept.DepartmentPrintSignatureOut)
 async def set_department_print_signatures(
     dept_id: int,
-    payload: schema_dept.DepartmentPrintSignatureUpdate,
+    payload: schema_dept.DepartmentPrintSignatureAdminUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(deps.require_role("ADMIN")),
 ):
     dept = await crud_dept.get_department(db, dept_id)
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
+    current_row = await crud_dept_signature.get_or_create_for_department(
+        db,
+        department_id=dept_id,
+        actor_user_id=current_user.id,
+    )
     row = await crud_dept_signature.upsert_for_department(
         db,
         department_id=dept_id,
-        data=payload.model_dump(),
+        data={
+            "approval_title": current_row.approval_title,
+            "approval_position": current_row.approval_position,
+            "approval_name": current_row.approval_name,
+            "agreed_title": payload.agreed_title,
+            "agreed_position": payload.agreed_position,
+            "agreed_name": payload.agreed_name,
+        },
         actor_user_id=current_user.id,
     )
     await db.commit()

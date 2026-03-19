@@ -1,0 +1,191 @@
+<!doctype html><html lang='uk'><head><meta charset='utf-8' />
+<style>body{font-family:'Times New Roman',serif;color:#111;font-size:12px;line-height:1.35;margin:16mm;}h1{font-size:24px;margin:0 0 10px;}h2{font-size:18px;margin:18px 0 8px;}h3{font-size:15px;margin:12px 0 6px;}p,li{font-size:12px;}table{width:100%;border-collapse:collapse;table-layout:fixed;}th,td{border:1px solid #555;padding:4px 6px;vertical-align:top;word-break:break-word;overflow-wrap:anywhere;}th{background:#eee;font-weight:700;}code{background:#f4f4f4;padding:1px 3px;border-radius:3px;}@page{size:A4 landscape;margin:10mm;}</style>
+</head><body>
+<h1>PMM Online: Детальна Матриця Прав Доступу</h1>
+<p><em>Згенеровано: 2026-03-19 00:22:15</em></p>
+<h2>1. Ролі системи</h2>
+<ul>
+<li>`ADMIN`: повний контроль системи, довідників, складу, користувачів, звітів, оновлень, backup/restore, шаблонів друку.</li>
+<li>`OPERATOR`: операційна роль видачі ПММ, перегляд погоджених заявок, проведення етапу видачі.</li>
+<li>`DEPT_USER`: роль підрозділу, створення/редагування своїх заявок (до подання), підтвердження отримання, робота зі своїм ТЗ/маршрутами.</li>
+</ul>
+<h2>2. Що хто бачить у UI</h2>
+<h3>ADMIN</h3>
+<ul>
+<li>Дашборд, Заявки, Склад (прихід/баланс/журнал/коригування/перевірка), Інциденти.</li>
+<li>Звіти: `Звіт ТЗ`, `Звіт по підрозділах`.</li>
+<li>Довідники: підрозділи, транспорт, маршрути, густина, оператори, налаштування заявок.</li>
+<li>Система, PDF шаблони, Підтримка, Профіль.</li>
+</ul>
+<h3>OPERATOR</h3>
+<ul>
+<li>`Готово до видачі`, `Видано`, Профіль, Підтримка.</li>
+<li>У заявках оператор працює тільки зі статусами, допустимими для видачі.</li>
+</ul>
+<h3>DEPT_USER</h3>
+<ul>
+<li>`Мої заявки`, `Створити заявку`, `Транспорт`, `Маршрути`, Профіль, Підтримка.</li>
+<li>Доступ обмежений тільки власним підрозділом.</li>
+</ul>
+<h2>3. Бізнес-обмеження (критичні)</h2>
+<ul>
+<li>Підрозділ не може працювати із заявками іншого підрозділу.</li>
+<li>OPERATOR не має адмінських доступів; видача робиться лише в допустимому життєвому циклі заявки.</li>
+<li>Підтвердження підрозділом формує акт видачі (`issue_doc_no`) і проводить рух по складу.</li>
+<li>Експортні jobs для `DEPT_USER` обмежені лише власними jobs.</li>
+<li>Більшість системних/конфігураційних endpoint-ів доступні тільки `ADMIN`.</li>
+</ul>
+<h2>4. Повна API-матриця доступу</h2>
+<table>
+<tr><th>Module</th><th>Method</th><th>Path</th><th>Access</th><th>Function</th><th>Додаткові перевірки</th></tr>
+<tr><td>`auth`</td><td>`GET`</td><td>`/api/v1/me`</td><td>`AUTHENTICATED`</td><td>`get_me`</td><td>—</td></tr>
+<tr><td>`auth`</td><td>`POST`</td><td>`/api/v1/token`</td><td>`PUBLIC`</td><td>`login_for_access_token`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`GET`</td><td>`/api/v1/departments`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`list_departments`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`POST`</td><td>`/api/v1/departments`</td><td>`ADMIN`</td><td>`create_department`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`GET`</td><td>`/api/v1/departments/me/print-signatures`</td><td>`DEPT_USER`</td><td>`get_my_department_print_signatures`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`PUT`</td><td>`/api/v1/departments/me/print-signatures`</td><td>`DEPT_USER`</td><td>`set_my_department_print_signatures`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`DELETE`</td><td>`/api/v1/departments/{dept_id}`</td><td>`ADMIN`</td><td>`delete_department`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`GET`</td><td>`/api/v1/departments/{dept_id}`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_department`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`PATCH`</td><td>`/api/v1/departments/{dept_id}`</td><td>`ADMIN`</td><td>`update_department`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`GET`</td><td>`/api/v1/departments/{dept_id}/print-signatures`</td><td>`ADMIN`</td><td>`get_department_print_signatures`</td><td>—</td></tr>
+<tr><td>`departments`</td><td>`PUT`</td><td>`/api/v1/departments/{dept_id}/print-signatures`</td><td>`ADMIN`</td><td>`set_department_print_signatures`</td><td>—</td></tr>
+<tr><td>`incidents`</td><td>`GET`</td><td>`/api/v1/admin/incidents`</td><td>`ADMIN`</td><td>`list_admin_incidents`</td><td>—</td></tr>
+<tr><td>`incidents`</td><td>`GET`</td><td>`/api/v1/admin/incidents/unresolved_count`</td><td>`ADMIN`</td><td>`get_unresolved_incidents_count`</td><td>—</td></tr>
+<tr><td>`incidents`</td><td>`GET`</td><td>`/api/v1/admin/incidents/{incident_id}`</td><td>`ADMIN`</td><td>`get_admin_incident_detail`</td><td>—</td></tr>
+<tr><td>`incidents`</td><td>`PATCH`</td><td>`/api/v1/admin/incidents/{incident_id}`</td><td>`ADMIN`</td><td>`patch_admin_incident`</td><td>—</td></tr>
+<tr><td>`incidents`</td><td>`POST`</td><td>`/api/v1/admin/incidents/{incident_id}/retry`</td><td>`ADMIN`</td><td>`retry_admin_incident`</td><td>—</td></tr>
+<tr><td>`jobs`</td><td>`POST`</td><td>`/api/v1/jobs/exports/debts`</td><td>`ADMIN, DEPT_USER`</td><td>`create_debts_export_job`</td><td>—</td></tr>
+<tr><td>`jobs`</td><td>`POST`</td><td>`/api/v1/jobs/exports/requests`</td><td>`ADMIN, DEPT_USER`</td><td>`create_requests_export_job`</td><td>—</td></tr>
+<tr><td>`jobs`</td><td>`POST`</td><td>`/api/v1/jobs/exports/vehicle-report`</td><td>`ADMIN, DEPT_USER`</td><td>`create_vehicle_report_export_job`</td><td>—</td></tr>
+<tr><td>`jobs`</td><td>`POST`</td><td>`/api/v1/jobs/reconcile`</td><td>`ADMIN`</td><td>`create_reconcile_job`</td><td>—</td></tr>
+<tr><td>`jobs`</td><td>`GET`</td><td>`/api/v1/jobs/{job_id}`</td><td>`ADMIN, DEPT_USER`</td><td>`get_job`</td><td>DEPT_USER: лише власні export jobs; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`jobs`</td><td>`GET`</td><td>`/api/v1/jobs/{job_id}/download`</td><td>`ADMIN, DEPT_USER`</td><td>`download_job_result`</td><td>DEPT_USER: лише власні export jobs; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`jobs`</td><td>`GET`</td><td>`/api/v1/reports/departments`</td><td>`ADMIN, DEPT_USER`</td><td>`get_departments_report`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`jobs`</td><td>`GET`</td><td>`/api/v1/reports/vehicle-consumption`</td><td>`ADMIN, DEPT_USER`</td><td>`get_vehicle_consumption_report`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`jobs`</td><td>`GET`</td><td>`/api/v1/stock/reconcile`</td><td>`ADMIN`</td><td>`get_stock_reconcile_now`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/alerts`</td><td>`ADMIN`</td><td>`list_admin_alerts`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/alerts/{alert_id}/resolve`</td><td>`ADMIN`</td><td>`resolve_admin_alert`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/backup`</td><td>`ADMIN`</td><td>`get_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backup`</td><td>`ADMIN`</td><td>`restore_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/backups`</td><td>`ADMIN`</td><td>`list_real_backups`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/backups/config`</td><td>`ADMIN`</td><td>`get_real_backup_config`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/config`</td><td>`ADMIN`</td><td>`set_real_backup_config`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/create`</td><td>`ADMIN`</td><td>`create_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/upload`</td><td>`ADMIN`</td><td>`upload_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/upload-and-restore`</td><td>`ADMIN`</td><td>`upload_and_restore_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`DELETE`</td><td>`/api/v1/settings/backups/{filename}`</td><td>`ADMIN`</td><td>`delete_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/backups/{filename}/download`</td><td>`ADMIN`</td><td>`download_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/{filename}/restore`</td><td>`ADMIN`</td><td>`restore_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/backups/{filename}/verify`</td><td>`ADMIN`</td><td>`verify_real_backup`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/incidents`</td><td>`ADMIN`</td><td>`list_admin_alerts`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/incidents/{alert_id}/resolve`</td><td>`ADMIN`</td><td>`resolve_admin_alert`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/logs`</td><td>`ADMIN`</td><td>`get_logs`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`POST`</td><td>`/api/v1/settings/logs/clear`</td><td>`ADMIN`</td><td>`clear_logs`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/logs/export`</td><td>`ADMIN`</td><td>`export_logs`</td><td>—</td></tr>
+<tr><td>`logs`</td><td>`GET`</td><td>`/api/v1/settings/logs/posting-errors`</td><td>`ADMIN`</td><td>`export_posting_error_logs`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`DELETE`</td><td>`/api/v1/admin/pdf-template-versions/{version_id}`</td><td>`ADMIN`</td><td>`delete_pdf_template_version`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`PATCH`</td><td>`/api/v1/admin/pdf-template-versions/{version_id}`</td><td>`ADMIN`</td><td>`patch_pdf_template_version`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`POST`</td><td>`/api/v1/admin/pdf-template-versions/{version_id}/preview`</td><td>`ADMIN`</td><td>`preview_pdf_template_version`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`POST`</td><td>`/api/v1/admin/pdf-template-versions/{version_id}/publish`</td><td>`ADMIN`</td><td>`publish_pdf_template_version`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`GET`</td><td>`/api/v1/admin/pdf-templates`</td><td>`ADMIN`</td><td>`list_pdf_templates`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`POST`</td><td>`/api/v1/admin/pdf-templates`</td><td>`ADMIN`</td><td>`create_pdf_template`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`DELETE`</td><td>`/api/v1/admin/pdf-templates/{template_id}`</td><td>`ADMIN`</td><td>`delete_pdf_template`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`GET`</td><td>`/api/v1/admin/pdf-templates/{template_id}`</td><td>`ADMIN`</td><td>`get_pdf_template`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`POST`</td><td>`/api/v1/admin/pdf-templates/{template_id}/versions`</td><td>`ADMIN`</td><td>`create_pdf_template_version`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`GET`</td><td>`/api/v1/print-artifacts/{artifact_id}/download`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`download_print_artifact`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`GET`</td><td>`/api/v1/requests/{request_id}/print/act`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`print_request_issue_act`</td><td>—</td></tr>
+<tr><td>`pdf_templates`</td><td>`POST`</td><td>`/api/v1/requests/{request_id}/print/pdf`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`print_request_pdf`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/posting-sessions/{session_id}`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_posting_session`</td><td>DEPT_USER: тільки власний підрозділ; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`list_requests`</td><td>Є окрема логіка/скоуп для DEPT_USER; Є окрема логіка/скоуп для OPERATOR</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests`</td><td>`DEPT_USER`</td><td>`create_request`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/admin`</td><td>`ADMIN`</td><td>`create_request_as_admin`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/admin/month-end-confirm`</td><td>`ADMIN`</td><td>`month_end_confirm_requests`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`DELETE`</td><td>`/api/v1/requests/{req_id}`</td><td>`ADMIN, DEPT_USER`</td><td>`delete_draft_request`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests/{req_id}`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_request_detail`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; OPERATOR: лише заявки APPROVED/ISSUED_BY_OPERATOR; Видача оператором лише APPROVED/ISSUED_BY_OPERATOR; Є окрема логіка/скоуп для DEPT_USER; Є окрема логіка/скоуп для OPERATOR</td></tr>
+<tr><td>`requests`</td><td>`PUT`</td><td>`/api/v1/requests/{req_id}`</td><td>`DEPT_USER`</td><td>`update_request`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/approve`</td><td>`ADMIN`</td><td>`approve_request`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests/{req_id}/audit`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_request_audit`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/confirm`</td><td>`DEPT_USER`</td><td>`confirm_request`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/issue`</td><td>`OPERATOR`</td><td>`issue_request`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/items`</td><td>`DEPT_USER`</td><td>`add_item`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток</td></tr>
+<tr><td>`requests`</td><td>`DELETE`</td><td>`/api/v1/requests/{req_id}/items/{item_id}`</td><td>`DEPT_USER`</td><td>`delete_item`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/planned-activities`</td><td>`ADMIN, DEPT_USER`</td><td>`set_request_planned_activities`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests/{req_id}/posting-sessions`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_request_posting_sessions`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests/{req_id}/print`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`print_request`</td><td>Перевірка належності заявки підрозділу; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/reject`</td><td>`ADMIN`</td><td>`reject_request`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/reverse`</td><td>`ADMIN`</td><td>`reverse_request`</td><td>—</td></tr>
+<tr><td>`requests`</td><td>`GET`</td><td>`/api/v1/requests/{req_id}/snapshots`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`get_request_snapshots`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`requests`</td><td>`POST`</td><td>`/api/v1/requests/{req_id}/submit`</td><td>`DEPT_USER`</td><td>`submit_request`</td><td>DEPT_USER: тільки власний підрозділ; Перевірка належності заявки підрозділу; Редагування лише чернеток</td></tr>
+<tr><td>`routes`</td><td>`GET`</td><td>`/api/v1/route-change-requests`</td><td>`ADMIN, DEPT_USER`</td><td>`list_route_change_requests`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/route-change-requests/{req_id}/approve`</td><td>`ADMIN`</td><td>`approve_route_change_request`</td><td>—</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/route-change-requests/{req_id}/reject`</td><td>`ADMIN`</td><td>`reject_route_change_request`</td><td>—</td></tr>
+<tr><td>`routes`</td><td>`GET`</td><td>`/api/v1/routes`</td><td>`ADMIN, DEPT_USER`</td><td>`list_routes`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/routes`</td><td>`ADMIN, DEPT_USER`</td><td>`create_route`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/routes/{rid}/approve`</td><td>`ADMIN`</td><td>`approve_route`</td><td>—</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/routes/{rid}/change-requests`</td><td>`DEPT_USER`</td><td>`create_route_change_request`</td><td>—</td></tr>
+<tr><td>`routes`</td><td>`POST`</td><td>`/api/v1/routes/{rid}/reject`</td><td>`ADMIN`</td><td>`reject_route`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/density`</td><td>`ADMIN`</td><td>`get_density_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/density`</td><td>`ADMIN`</td><td>`set_density_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/density/history`</td><td>`ADMIN`</td><td>`get_density_history`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/features`</td><td>`ADMIN`</td><td>`get_feature_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/features`</td><td>`ADMIN`</td><td>`set_feature_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/planned-activities`</td><td>`ADMIN, OPERATOR, DEPT_USER`</td><td>`list_planned_activities`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/planned-activities`</td><td>`ADMIN`</td><td>`create_planned_activity`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`DELETE`</td><td>`/api/v1/settings/planned-activities/{activity_id}`</td><td>`ADMIN`</td><td>`delete_planned_activity`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`PATCH`</td><td>`/api/v1/settings/planned-activities/{activity_id}`</td><td>`ADMIN`</td><td>`update_planned_activity`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/pwa`</td><td>`ADMIN`</td><td>`get_pwa_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/pwa`</td><td>`ADMIN`</td><td>`set_pwa_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`DELETE`</td><td>`/api/v1/settings/pwa/icon`</td><td>`ADMIN`</td><td>`delete_pwa_icon`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/pwa/icon`</td><td>`ADMIN`</td><td>`upload_pwa_icon`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/pwa/icon/{size}.png`</td><td>`PUBLIC`</td><td>`get_pwa_icon_binary`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/pwa/icons`</td><td>`ADMIN`</td><td>`get_pwa_icons`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/pwa/manifest.webmanifest`</td><td>`PUBLIC`</td><td>`get_dynamic_manifest`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/support`</td><td>`ADMIN, OPERATOR, DEPT_USER`</td><td>`get_support_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`POST`</td><td>`/api/v1/settings/support`</td><td>`ADMIN`</td><td>`set_support_settings`</td><td>—</td></tr>
+<tr><td>`settings`</td><td>`GET`</td><td>`/api/v1/settings/support/public`</td><td>`PUBLIC`</td><td>`get_support_settings_public`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`GET`</td><td>`/api/v1/stock/adjustments`</td><td>`ADMIN`</td><td>`list_adjustments`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`POST`</td><td>`/api/v1/stock/adjustments`</td><td>`ADMIN`</td><td>`create_adjustment`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`GET`</td><td>`/api/v1/stock/adjustments/{adjustment_id}`</td><td>`ADMIN`</td><td>`get_adjustment_detail`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`GET`</td><td>`/api/v1/stock/balance`</td><td>`ADMIN, OPERATOR`</td><td>`get_balance`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`GET`</td><td>`/api/v1/stock/ledger`</td><td>`ADMIN`</td><td>`list_ledger`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`GET`</td><td>`/api/v1/stock/receipts`</td><td>`ADMIN`</td><td>`list_receipts`</td><td>—</td></tr>
+<tr><td>`stock`</td><td>`POST`</td><td>`/api/v1/stock/receipts`</td><td>`ADMIN`</td><td>`create_receipt`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`POST`</td><td>`/api/v1/system/updates/apply`</td><td>`ADMIN`</td><td>`apply_system_update`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/check`</td><td>`ADMIN`</td><td>`check_system_update`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/config`</td><td>`ADMIN`</td><td>`get_system_update_config`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`POST`</td><td>`/api/v1/system/updates/config`</td><td>`ADMIN`</td><td>`set_system_update_config`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/logs`</td><td>`ADMIN`</td><td>`list_system_update_logs`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/manifest`</td><td>`ADMIN`</td><td>`get_system_update_manifest_compat`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/meta`</td><td>`ADMIN`</td><td>`get_system_update_meta`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`POST`</td><td>`/api/v1/system/updates/rollback`</td><td>`ADMIN`</td><td>`rollback_system_update`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`GET`</td><td>`/api/v1/system/updates/status/{job_id}`</td><td>`ADMIN`</td><td>`get_system_update_status`</td><td>—</td></tr>
+<tr><td>`updates`</td><td>`POST`</td><td>`/api/v1/system/updates/{update_log_id}/rollback`</td><td>`ADMIN`</td><td>`rollback_system_update_by_log_id`</td><td>—</td></tr>
+<tr><td>`users`</td><td>`GET`</td><td>`/api/v1/users`</td><td>`ADMIN`</td><td>`list_users`</td><td>—</td></tr>
+<tr><td>`users`</td><td>`POST`</td><td>`/api/v1/users`</td><td>`ADMIN`</td><td>`create_user`</td><td>—</td></tr>
+<tr><td>`users`</td><td>`DELETE`</td><td>`/api/v1/users/{user_id}`</td><td>`ADMIN`</td><td>`delete_user`</td><td>—</td></tr>
+<tr><td>`users`</td><td>`GET`</td><td>`/api/v1/users/{user_id}`</td><td>`ADMIN`</td><td>`get_user`</td><td>—</td></tr>
+<tr><td>`users`</td><td>`PATCH`</td><td>`/api/v1/users/{user_id}`</td><td>`ADMIN`</td><td>`update_user`</td><td>—</td></tr>
+<tr><td>`vehicle_change_requests`</td><td>`GET`</td><td>`/api/v1/vehicle-change-requests`</td><td>`ADMIN, DEPT_USER`</td><td>`list_vehicle_change_requests`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`vehicle_change_requests`</td><td>`POST`</td><td>`/api/v1/vehicle-change-requests/{req_id}/approve`</td><td>`ADMIN`</td><td>`approve_vehicle_change_request`</td><td>—</td></tr>
+<tr><td>`vehicle_change_requests`</td><td>`POST`</td><td>`/api/v1/vehicle-change-requests/{req_id}/reject`</td><td>`ADMIN`</td><td>`reject_vehicle_change_request`</td><td>—</td></tr>
+<tr><td>`vehicle_change_requests`</td><td>`POST`</td><td>`/api/v1/vehicles/{vid}/change-requests`</td><td>`DEPT_USER`</td><td>`create_vehicle_change_request`</td><td>—</td></tr>
+<tr><td>`vehicles`</td><td>`GET`</td><td>`/api/v1/vehicles`</td><td>`ADMIN, DEPT_USER, OPERATOR`</td><td>`list_vehicles`</td><td>Є окрема логіка/скоуп для OPERATOR</td></tr>
+<tr><td>`vehicles`</td><td>`POST`</td><td>`/api/v1/vehicles`</td><td>`ADMIN, DEPT_USER`</td><td>`create_vehicle`</td><td>Є окрема логіка/скоуп для DEPT_USER</td></tr>
+<tr><td>`vehicles`</td><td>`DELETE`</td><td>`/api/v1/vehicles/{vid}`</td><td>`ADMIN`</td><td>`delete_vehicle`</td><td>—</td></tr>
+<tr><td>`vehicles`</td><td>`PATCH`</td><td>`/api/v1/vehicles/{vid}`</td><td>`ADMIN`</td><td>`update_vehicle`</td><td>—</td></tr>
+<tr><td>`vehicles`</td><td>`POST`</td><td>`/api/v1/vehicles/{vid}/approve`</td><td>`ADMIN`</td><td>`approve_vehicle`</td><td>—</td></tr>
+</table>
+<h2>5. Пояснення Access</h2>
+<ul>
+<li>`PUBLIC`: endpoint без role-checker (може мати інші перевірки).</li>
+<li>`AUTHENTICATED`: будь-який активний користувач з валідним токеном.</li>
+<li>`ADMIN`, `OPERATOR`, `DEPT_USER`: строго рольовий доступ.</li>
+<li>`ADMIN, DEPT_USER` (та інші комбінації): доступний набір ролей, додаткові обмеження див. у колонці перевірок.</li>
+</ul>
+<h2>6. Рекомендації експлуатації</h2>
+<ul>
+<li>Ревізію цього документа робити після кожного релізу зі зміною endpoint-ів або role logic.</li>
+<li>Для audit trail зберігати версію цього PDF разом з релізом.</li>
+<li>Для критичних дій (`approve/issue/confirm/restore/update`) залишати додатковий операційний контроль через журнал дій.</li>
+</ul>
+</body></html>

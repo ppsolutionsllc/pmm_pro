@@ -1,13 +1,15 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+from sqlalchemy import delete, update
+from sqlalchemy import func
 
 from app.models.user import User
 from app.core.security import get_password_hash, verify_password
 from app.schemas.user import UserCreate, RoleEnum
 
 async def get_user_by_login(db: AsyncSession, login: str):
-    result = await db.execute(select(User).where(User.login == login))
+    normalized = str(login or "").strip().lower()
+    result = await db.execute(select(User).where(func.lower(User.login) == normalized))
     return result.scalars().first()
 
 
@@ -43,3 +45,8 @@ async def update_user(db: AsyncSession, user_id: int, **kwargs):
     await db.execute(update(User).where(User.id == user_id).values(**kwargs))
     await db.commit()
     return await get_user(db, user_id)
+
+
+async def delete_user(db: AsyncSession, user_id: int):
+    await db.execute(delete(User).where(User.id == user_id))
+    await db.commit()

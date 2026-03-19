@@ -70,6 +70,32 @@ async def get_vehicle_consumption_report(
     return {"rows": rows, "count": len(rows)}
 
 
+@router.get("/reports/departments")
+async def get_departments_report(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    department_id: int | None = None,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(deps.require_any_role(["ADMIN", "DEPT_USER"])),
+):
+    if current_user.role.value == "DEPT_USER":
+        department_id = current_user.department_id
+    try:
+        parsed_from = datetime.fromisoformat(date_from) if date_from else None
+        parsed_to = datetime.fromisoformat(date_to) if date_to else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO datetime")
+    rows = await reporting_service.build_department_consumption_rows(
+        db,
+        date_from=parsed_from,
+        date_to=parsed_to,
+        department_id=department_id,
+        status=status,
+    )
+    return {"rows": rows, "count": len(rows)}
+
+
 @router.post("/jobs/reconcile", response_model=schema_job.JobCreateOut)
 async def create_reconcile_job(
     data: schema_job.ReconcileJobIn,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
@@ -8,12 +9,25 @@ import { api } from '../../api';
 import { ledgerRefTypeLabel } from '../../utils/humanLabels';
 
 const StockLedger: React.FC = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [ledger, setLedger] = useState<any[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const load = (period?: { from?: string; to?: string }) => {
+    const effectiveFrom = period?.from ?? dateFrom;
+    const effectiveTo = period?.to ?? dateTo;
+    setLoading(true);
+    api.getLedger({
+      date_from: effectiveFrom || undefined,
+      date_to: effectiveTo || undefined,
+    }).then(setLedger).finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    api.getLedger().then(setLedger).finally(() => setLoading(false));
+    load();
   }, []);
 
   const formatNum = (value: number | null | undefined) => {
@@ -53,6 +67,10 @@ const StockLedger: React.FC = () => {
       })
       .join('');
 
+    const periodLabel = dateFrom || dateTo
+      ? `${dateFrom || '...'} - ${dateTo || '...'}`
+      : 'Увесь період';
+
     const html = `
       <!doctype html>
       <html lang="uk">
@@ -73,7 +91,7 @@ const StockLedger: React.FC = () => {
       </head>
       <body>
         <h1>Журнал руху палива</h1>
-        <p class="meta">Сформовано: ${esc(new Date().toLocaleString('uk-UA'))}</p>
+        <p class="meta">Період: ${esc(periodLabel)}<br/>Сформовано: ${esc(new Date().toLocaleString('uk-UA'))}</p>
         <table>
           <thead>
             <tr>
@@ -104,13 +122,36 @@ const StockLedger: React.FC = () => {
     popup.print();
   };
 
+  const openRelatedDocument = (row: any) => {
+    const url = String(row?.ref_doc_url || '').trim();
+    if (!url) {
+      toast('Повʼязаний документ не знайдено', 'warning');
+      return;
+    }
+    navigate(url);
+  };
+
   const columns = [
     { key: 'id', title: '№' },
     { key: 'fuel_type', title: 'Паливо' },
     { key: 'delta_liters', title: 'Δ Літри', render: (r: any) => <span className={r.delta_liters >= 0 ? 'text-accent' : 'text-danger'}>{r.delta_liters >= 0 ? '+' : ''}{r.delta_liters?.toFixed(2)}</span> },
     { key: 'delta_kg', title: 'Δ Кг', render: (r: any) => <span className={r.delta_kg >= 0 ? 'text-accent' : 'text-danger'}>{r.delta_kg >= 0 ? '+' : ''}{r.delta_kg?.toFixed(2)}</span> },
     { key: 'ref_type', title: 'Операція', render: (r: any) => ledgerRefTypeLabel(r.ref_type) },
-    { key: 'ref_id', title: 'Повʼязаний документ' },
+    {
+      key: 'ref_id',
+      title: 'Повʼязаний документ',
+      render: (r: any) => (
+        r.ref_doc_url ? (
+          <button
+            type="button"
+            className="text-accent hover:underline"
+            onClick={() => openRelatedDocument(r)}
+          >
+            {r.ref_doc_label || `Документ №${r.ref_id}`}
+          </button>
+        ) : (r.ref_doc_label || '—')
+      ),
+    },
     { key: 'created_at', title: 'Дата', render: (r: any) => r.created_at ? new Date(r.created_at).toLocaleDateString('uk-UA') : '—' },
   ];
 
@@ -120,11 +161,63 @@ const StockLedger: React.FC = () => {
         title="Журнал руху палива"
         subtitle="Журнал руху палива"
         actions={
-          <button onClick={handlePrint} className="btn-secondary" disabled={loading || !ledger.length}>
-            <Printer size={16} /> Друк
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => load()} className="btn-secondary" disabled={loading}>Оновити</button>
+            <button onClick={handlePrint} className="btn-secondary" disabled={loading || !ledger.length}>
+              <Printer size={16} /> Друк
+            </button>
+          </div>
         }
       />
+
+      <div className="card mb-4">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Період</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">З дати</label>
+            <input
+              type="date"
+              className="input-field"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">По дату</label>
+            <input
+              type="date"
+              className="input-field"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              if (dateFrom && dateTo && dateTo < dateFrom) {
+                toast('Дата "по" повинна бути не раніше дати "з"', 'warning');
+                return;
+              }
+              load();
+            }}
+            disabled={loading}
+          >
+            Застосувати
+          </button>
+          <button
+            className="btn-ghost"
+            onClick={() => {
+              setDateFrom('');
+              setDateTo('');
+              load({ from: '', to: '' });
+            }}
+            disabled={loading}
+          >
+            Скинути
+          </button>
+        </div>
+      </div>
+
       {loading ? <LoadingSkeleton /> : <DataTable columns={columns} data={ledger} emptyText="Записів немає" />}
     </div>
   );

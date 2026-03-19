@@ -53,6 +53,7 @@ const RequestsList: React.FC = () => {
 
   const columns = [
     { key: 'request_number', title: '№ Заявки', render: (r: any) => <span className="font-medium text-gray-200">{r.request_number}</span> },
+    { key: 'issue_doc_no', title: 'Акт №', render: (r: any) => r.issue_doc_no || '—' },
     { key: 'department_id', title: 'Підрозділ', render: (r: any) => deptName(r.department_id) },
     { key: 'route_warn', title: 'Маршрут', render: (r: any) => (
       r.route_is_manual ? <span className="text-xs text-warn">Ручний</span> : <span className="text-xs text-gray-500">—</span>

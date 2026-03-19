@@ -552,9 +552,9 @@ async def transition_request_status(
     if to_status == RequestStatus.SUBMITTED:
         if await _is_department_signature_required_on_submit(db):
             dept_signature = await crud_dept_signature.get_by_department_id(db, req.department_id)
-            if not crud_dept_signature.is_signature_complete(dept_signature):
+            if not crud_dept_signature.is_department_approval_complete(dept_signature):
                 raise WorkflowConflictError(
-                    "Перед поданням заявки заповніть блок підписантів у профілі підрозділу."
+                    "Перед поданням заявки заповніть блок «З розрахунком згоден» у профілі підрозділу."
                 )
 
     now = utcnow()

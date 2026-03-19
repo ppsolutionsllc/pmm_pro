@@ -213,6 +213,24 @@ async def print_request_pdf(
     }
 
 
+@router.get("/requests/{request_id}/print/act")
+async def print_request_issue_act(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(deps.require_any_role(["ADMIN", "DEPT_USER", "OPERATOR"])),
+):
+    await _assert_request_access(db, request_id, current_user)
+    pdf_bytes = await pdf_template_service.build_request_issue_act_pdf(
+        db,
+        request_id=request_id,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=request_{request_id}_issue_act.pdf"},
+    )
+
+
 @router.get("/print-artifacts/{artifact_id}/download")
 async def download_print_artifact(
     artifact_id: str,

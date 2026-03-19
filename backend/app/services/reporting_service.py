@@ -6,7 +6,9 @@ from typing import Any
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.models.department import Department
 from app.models.request import Request, RequestStatus
 from app.models.request_item import RequestItem
 from app.models.stock import DebtStatus, FuelDebt, FuelType, StockAdjustmentLine, StockBalance, StockIssue, StockIssueLine, StockReceipt
@@ -235,3 +237,99 @@ async def build_requests_rows(
         }
         for r in rows
     ]
+
+
+async def build_department_consumption_rows(
+    db: AsyncSession,
+    *,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    department_id: int | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    q = (
+        select(Request)
+        .options(
+            selectinload(Request.department),
+            selectinload(Request.items).selectinload(RequestItem.vehicle),
+            selectinload(Request.stock_issue).selectinload(StockIssue.lines),
+        )
+    )
+    if department_id is not None:
+        q = q.where(Request.department_id == department_id)
+    if status:
+        try:
+            q = q.where(Request.status == RequestStatus(status))
+        except ValueError:
+            return []
+    if date_from is not None:
+        q = q.where(Request.created_at >= date_from)
+    if date_to is not None:
+        q = q.where(Request.created_at <= date_to)
+
+    reqs = (await db.execute(q)).scalars().all()
+    agg: dict[int, dict[str, Any]] = {}
+    for req in reqs:
+        dep_id = int(req.department_id)
+        dep_name = (
+            req.department.name
+            if isinstance(req.department, Department) and req.department and req.department.name
+            else f"Підрозділ #{dep_id}"
+        )
+        if dep_id not in agg:
+            agg[dep_id] = {
+                "department_id": dep_id,
+                "department_name": dep_name,
+                "requests_count": 0,
+                "posted_count": 0,
+                "debt_requests_count": 0,
+                "requested_ab_liters": 0.0,
+                "requested_dp_liters": 0.0,
+                "issued_ab_liters": 0.0,
+                "issued_dp_liters": 0.0,
+                "debt_ab_liters": 0.0,
+                "debt_dp_liters": 0.0,
+            }
+        bucket = agg[dep_id]
+        bucket["requests_count"] += 1
+        if req.status == RequestStatus.POSTED:
+            bucket["posted_count"] += 1
+        if bool(req.has_debt):
+            bucket["debt_requests_count"] += 1
+
+        for item in req.items or []:
+            vehicle = item.vehicle
+            if not vehicle or not vehicle.fuel_type:
+                continue
+            liters = float(item.required_liters or 0.0)
+            if vehicle.fuel_type == FuelType.AB:
+                bucket["requested_ab_liters"] += liters
+            elif vehicle.fuel_type == FuelType.DP:
+                bucket["requested_dp_liters"] += liters
+
+        issue = req.stock_issue
+        for ln in (issue.lines if issue else []) or []:
+            issued = float(ln.issued_liters or 0.0)
+            debt = float(ln.missing_liters or 0.0)
+            if ln.fuel_type == FuelType.AB:
+                bucket["issued_ab_liters"] += issued
+                bucket["debt_ab_liters"] += debt
+            elif ln.fuel_type == FuelType.DP:
+                bucket["issued_dp_liters"] += issued
+                bucket["debt_dp_liters"] += debt
+
+    out = []
+    for row in agg.values():
+        out.append(
+            {
+                **row,
+                "requested_ab_liters": round(float(row["requested_ab_liters"]), 3),
+                "requested_dp_liters": round(float(row["requested_dp_liters"]), 3),
+                "issued_ab_liters": round(float(row["issued_ab_liters"]), 3),
+                "issued_dp_liters": round(float(row["issued_dp_liters"]), 3),
+                "debt_ab_liters": round(float(row["debt_ab_liters"]), 3),
+                "debt_dp_liters": round(float(row["debt_dp_liters"]), 3),
+            }
+        )
+    out.sort(key=lambda r: (r["department_name"] or "").lower())
+    return out

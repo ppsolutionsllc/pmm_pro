@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     backup_retention_count: int = Field(10, alias="BACKUP_RETENTION_COUNT")
     posting_error_log_path: str = Field("/tmp/pmm_posting_errors.log", alias="POSTING_ERROR_LOG_PATH")
     frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
+    print_qr_target_url: str = Field("https://pmm.66br.pp.ua", alias="PRINT_QR_TARGET_URL")
     backend_version: str = Field("dev", alias="BACKEND_VERSION")
     frontend_version: str = Field("dev", alias="FRONTEND_VERSION")
     update_manifest_path: str = Field("/app/app/update_manifest.json", alias="UPDATE_MANIFEST_PATH")

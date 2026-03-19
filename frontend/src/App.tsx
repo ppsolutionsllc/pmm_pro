@@ -30,6 +30,7 @@ import SettingsSupport from './pages/admin/SettingsSupport';
 import SettingsRequests from './pages/admin/SettingsRequests';
 import References from './pages/admin/References';
 import VehicleReport from './pages/admin/VehicleReport';
+import DepartmentReport from './pages/admin/DepartmentReport';
 import Incidents from './pages/admin/Incidents';
 import IncidentDetail from './pages/admin/IncidentDetail';
 import PdfTemplates from './pages/admin/PdfTemplates';
@@ -80,6 +81,7 @@ function App() {
         <Route path="incidents" element={<Incidents />} />
         <Route path="incidents/:id" element={<IncidentDetail />} />
         <Route path="reports/vehicles" element={<VehicleReport />} />
+        <Route path="reports/departments" element={<DepartmentReport />} />
         <Route path="departments" element={<Departments />} />
         <Route path="departments/:id" element={<DepartmentDetail />} />
         <Route path="vehicles" element={<Vehicles />} />

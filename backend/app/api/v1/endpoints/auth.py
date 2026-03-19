@@ -19,7 +19,8 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await crud_user.authenticate(db, form_data.username, form_data.password)
+    username = str(form_data.username or "").strip()
+    user = await crud_user.authenticate(db, username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

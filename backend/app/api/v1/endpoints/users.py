@@ -1,6 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
 from app.schemas import user as schema_user
@@ -18,6 +19,9 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(deps.require_role("ADMIN")),
 ):
+    user_in.login = str(user_in.login or "").strip()
+    if not user_in.login:
+        raise HTTPException(status_code=400, detail="Логін обов'язковий")
     if user_in.role == schema_user.RoleEnum.OPERATOR:
         # Operator is global by business rule and must not be tied to a department.
         user_in.department_id = None
@@ -67,9 +71,44 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     update_data = user_in.model_dump(exclude_none=True)
+    if "login" in update_data:
+        update_data["login"] = str(update_data["login"] or "").strip()
+        if not update_data["login"]:
+            raise HTTPException(status_code=400, detail="Логін обов'язковий")
+    next_login = update_data.get("login")
+    if next_login and next_login != user.login:
+        existing = await crud_user.get_user_by_login(db, next_login)
+        if existing and existing.id != user.id:
+            raise HTTPException(status_code=400, detail="Login already registered")
     if "password" in update_data and update_data["password"]:
         from app.core.security import get_password_hash
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
     else:
         update_data.pop("password", None)
+    if getattr(user.role, "value", None) == schema_user.RoleEnum.OPERATOR.value and "department_id" in update_data:
+        update_data["department_id"] = None
     return await crud_user.update_user(db, user_id, **update_data)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    user = await crud_user.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Неможливо видалити власний обліковий запис")
+    if getattr(user.role, "value", None) != schema_user.RoleEnum.OPERATOR.value:
+        raise HTTPException(status_code=400, detail="Дозволено видаляти тільки операторів ПММ")
+    try:
+        await crud_user.delete_user(db, user_id)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Оператора неможливо видалити: є пов'язані записи. Деактивуйте обліковий запис.",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

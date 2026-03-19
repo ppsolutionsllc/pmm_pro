@@ -25,7 +25,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
       - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
       - SQL_ECHO=${SQL_ECHO:-false}
       - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
@@ -49,7 +49,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
       - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
       - SQL_ECHO=${SQL_ECHO:-false}
       - DB_POOL_SIZE=${DB_POOL_SIZE:-10}

@@ -33,6 +33,7 @@ from app.models.request_item import RequestItem
 from app.models.request_snapshot import RequestSnapshot, RequestSnapshotStage
 from app.models.stock import FuelType, StockIssue
 from app.models.system_meta import SystemMeta
+from app.services.barcode_service import build_code39_png_b64, build_unique_barcode_value
 
 try:
     from weasyprint import HTML
@@ -72,6 +73,30 @@ AVAILABLE_SOURCES = [
     "request.coeff_snapshot_dp",
     "request.coeff_snapshot_at",
     "request.has_debt",
+    "department.name",
+    "issue.issue_doc_no",
+    "issue.posted_at",
+    "system.backend_version",
+    "system.frontend_version",
+    "system.db_schema_version",
+    "computed.row_no",
+    "computed.need_10_days_ab",
+    "computed.need_10_days_dp",
+    "computed.total_ab_liters",
+    "computed.total_dp_liters",
+    "computed.debt_ab_liters",
+    "computed.debt_dp_liters",
+    "item.planned_activity_name",
+    "item.vehicle_name",
+    "item.vehicle_plate",
+    "item.vehicle_fuel_type",
+    "item.route_text",
+    "item.distance_km_per_trip",
+    "item.total_km",
+    "item.required_liters",
+    "item.required_kg",
+    "item.consumption_l_per_100km",
+    "item.justification_text",
 ]
 
 DEFAULT_APPROVAL_TITLE = "З розрахунком згоден:"
@@ -105,17 +130,38 @@ def _default_layout_json() -> dict[str, Any]:
 
 def _default_columns_json() -> list[dict[str, Any]]:
     return [
-        {"id": "request_number", "title": "Номер заявки", "width": 14, "align": "left", "format": "text", "source": "request.request_number", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "status", "title": "Статус", "width": 10, "align": "left", "format": "text", "source": "request.status", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "route_text", "title": "Маршрут", "width": 18, "align": "left", "format": "text", "source": "request.route_text", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "distance_km_per_trip", "title": "Плече підвезення (км)", "width": 11, "align": "right", "format": "number_2", "source": "request.distance_km_per_trip", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "training_days_count", "title": "К-сть днів", "width": 8, "align": "right", "format": "number_0", "source": "request.training_days_count", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "persons_involved_count", "title": "К-сть осіб", "width": 8, "align": "right", "format": "number_0", "source": "request.persons_involved_count", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "coeff_snapshot_ab", "title": "Коеф. АБ", "width": 8, "align": "right", "format": "number_2", "source": "request.coeff_snapshot_ab", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "coeff_snapshot_dp", "title": "Коеф. ДП", "width": 8, "align": "right", "format": "number_2", "source": "request.coeff_snapshot_dp", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "created_at", "title": "Створено", "width": 9, "align": "center", "format": "datetime", "source": "request.created_at", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
-        {"id": "justification_text", "title": "Примітка", "width": 16, "align": "left", "format": "text", "source": "request.justification_text", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "row_no", "title": "№", "width": 6, "align": "center", "format": "number_0", "source": "computed.row_no", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "planned_activity_name", "title": "Заплановані заходи", "width": 22, "align": "left", "format": "text", "source": "item.planned_activity_name", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "vehicle_name", "title": "Автомобіль", "width": 14, "align": "left", "format": "text", "source": "item.vehicle_name", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "vehicle_plate", "title": "Номерний знак", "width": 12, "align": "center", "format": "text", "source": "item.vehicle_plate", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "route_text", "title": "Маршрут", "width": 16, "align": "left", "format": "text", "source": "item.route_text", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "distance_km_per_trip", "title": "Плече підвезення (км)", "width": 11, "align": "right", "format": "number_2", "source": "item.distance_km_per_trip", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "total_km", "title": "Пробіг (км)", "width": 10, "align": "right", "format": "number_2", "source": "item.total_km", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "required_liters", "title": "Потреба (л)", "width": 9, "align": "right", "format": "number_2", "source": "item.required_liters", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "vehicle_fuel_type", "title": "Пальне", "width": 8, "align": "center", "format": "text", "source": "item.vehicle_fuel_type", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
+        {"id": "justification_text", "title": "Примітка", "width": 12, "align": "left", "format": "text", "source": "item.justification_text", "visible": True, "rules": {"visibility_rule": "ALWAYS"}},
     ]
+
+
+_LEGACY_REQUEST_SOURCES = {
+    "request.request_number",
+    "request.status",
+    "request.route_text",
+    "request.distance_km_per_trip",
+    "request.training_days_count",
+    "request.persons_involved_count",
+    "request.coeff_snapshot_ab",
+    "request.coeff_snapshot_dp",
+    "request.created_at",
+    "request.justification_text",
+}
+
+
+def _is_legacy_request_table(columns: list[dict[str, Any]]) -> bool:
+    if len(columns) != len(_LEGACY_REQUEST_SOURCES):
+        return False
+    sources = {str(c.get("source") or "").strip() for c in columns if isinstance(c, dict)}
+    return sources == _LEGACY_REQUEST_SOURCES
 
 
 def _default_mapping_json() -> dict[str, Any]:
@@ -150,13 +196,24 @@ def _default_service_block_json() -> dict[str, Any]:
         "show_request_number": True,
         "show_generated_at": True,
         "show_department": True,
-        "show_status": True,
-        "show_audit_users": True,
-        "show_issue_doc_no": True,
         "show_system_version": True,
         "show_qr": True,
-        "rules": {"issue_doc_no": "IF_STATUS_IN", "debt_section": "IF_DEBT_GT_0"},
     }
+
+
+_SERVICE_BLOCK_ALLOWED_KEYS = (
+    "show_request_number",
+    "show_generated_at",
+    "show_department",
+    "show_system_version",
+    "show_qr",
+)
+
+
+def _normalize_service_block_json(payload: dict[str, Any] | None) -> dict[str, Any]:
+    base = _default_service_block_json()
+    incoming = payload if isinstance(payload, dict) else {}
+    return {key: bool(incoming.get(key, base[key])) for key in _SERVICE_BLOCK_ALLOWED_KEYS}
 
 
 @dataclass
@@ -333,6 +390,13 @@ def _resolve_source_value(source: str, *, request_ctx: dict[str, Any], item_ctx:
     if source.startswith("system."):
         return _deep_get(request_ctx.get("system") or {}, source.split(".", 1)[1])
     return None
+
+
+def _source_requires_item_row(source: str) -> bool:
+    src = str(source or "").strip()
+    if src.startswith("item."):
+        return True
+    return src in {"computed.row_no", "computed.need_10_days_ab", "computed.need_10_days_dp"}
 
 
 def _build_qr_b64(url: str) -> str:
@@ -563,7 +627,7 @@ async def create_template_version(
             "table_columns_json": source.table_columns_json,
             "mapping_json": source.mapping_json,
             "rules_json": source.rules_json,
-            "service_block_json": source.service_block_json,
+            "service_block_json": _normalize_service_block_json(source.service_block_json),
         }
     else:
         payload = default_version_payload()
@@ -601,18 +665,47 @@ async def patch_template_version(
     if not row:
         raise HTTPException(status_code=404, detail="Template version not found")
 
+    updated = False
     if name is not None:
         row.name = _normalize_version_name(name, row.version)
+        updated = True
     if layout_json is not None:
         row.layout_json = layout_json
+        updated = True
     if table_columns_json is not None:
         row.table_columns_json = normalize_columns(table_columns_json)
+        updated = True
     if mapping_json is not None:
         row.mapping_json = mapping_json
+        updated = True
     if rules_json is not None:
         row.rules_json = rules_json
+        updated = True
     if service_block_json is not None:
-        row.service_block_json = service_block_json
+        row.service_block_json = _normalize_service_block_json(service_block_json)
+        updated = True
+
+    if updated:
+        cached_artifacts = (
+            await db.execute(
+                select(PrintArtifact).where(
+                    and_(
+                        PrintArtifact.template_version_id == version_id,
+                        PrintArtifact.artifact_type == PrintArtifactType.PDF_REQUEST_FORM,
+                    )
+                )
+            )
+        ).scalars().all()
+        for artifact in cached_artifacts:
+            try:
+                path = Path(str(artifact.file_path)).expanduser().resolve()
+                if path.exists():
+                    path.unlink()
+            except Exception:
+                pass
+        if cached_artifacts:
+            await db.execute(delete(PrintArtifact).where(PrintArtifact.template_version_id == version_id))
+        await db.execute(delete(RequestPrintSnapshot).where(RequestPrintSnapshot.template_version_id == version_id))
 
     await db.flush()
     return row
@@ -963,8 +1056,8 @@ def _build_render_rows(columns: list[dict[str, Any]], request_ctx: dict[str, Any
         active_columns.append(col)
 
     rows: list[dict[str, Any]] = []
-    use_request_single_row = all(str(c.get("source") or "").startswith("request.") for c in active_columns)
-    row_sources = [None] if use_request_single_row else (request_ctx.get("items") or [])
+    use_item_rows = any(_source_requires_item_row(str(c.get("source") or "")) for c in active_columns)
+    row_sources = (request_ctx.get("items") or []) if use_item_rows else [None]
     for item in row_sources:
         row_cells = []
         for col in active_columns:
@@ -980,17 +1073,37 @@ def _build_render_rows(columns: list[dict[str, Any]], request_ctx: dict[str, Any
             )
         rows.append({"cells": row_cells})
 
-    rendered_columns = [
-        {
-            "id": c["id"],
-            "title": c.get("title") or c["id"],
-            "width": c.get("width") or 8,
-            "align": c.get("align") or "left",
-            "text_style": c.get("text_style") or "normal",
-            "font_size_pt": c.get("font_size_pt") or 11,
-        }
-        for c in active_columns
-    ]
+    raw_widths: list[float] = []
+    for c in active_columns:
+        try:
+            width = float(c.get("width") or 0)
+        except Exception:
+            width = 0
+        raw_widths.append(width if width > 0 else 8.0)
+
+    total_width = sum(raw_widths) or (len(raw_widths) * 8.0) or 1.0
+    normalized_widths: list[float] = []
+    consumed = 0.0
+    for idx, width in enumerate(raw_widths):
+        if idx == len(raw_widths) - 1:
+            normalized = round(max(0.1, 100.0 - consumed), 2)
+        else:
+            normalized = round((width / total_width) * 100.0, 2)
+            consumed += normalized
+        normalized_widths.append(normalized)
+
+    rendered_columns = []
+    for idx, c in enumerate(active_columns):
+        rendered_columns.append(
+            {
+                "id": c["id"],
+                "title": c.get("title") or c["id"],
+                "width": normalized_widths[idx],
+                "align": c.get("align") or "left",
+                "text_style": c.get("text_style") or "normal",
+                "font_size_pt": c.get("font_size_pt") or 11,
+            }
+        )
     return [{"columns": rendered_columns, "rows": rows}]
 
 
@@ -1021,8 +1134,10 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
         value = _resolve_source_value(source, request_ctx=request_ctx, item_ctx=None)
         service_fields.append({"label": label, "value": _format_value(value, "text")})
 
-    request_id = _deep_get(request_ctx, "request.id")
-    qr_url = f"{base_url.rstrip('/')}/admin/requests/{request_id}" if request_id else base_url
+    raw_qr_url = str(settings.print_qr_target_url or "").strip() or str(base_url or "").strip()
+    if raw_qr_url and not raw_qr_url.startswith(("http://", "https://")):
+        raw_qr_url = f"https://{raw_qr_url}"
+    qr_url = raw_qr_url or str(base_url or "").strip()
     qr_b64 = _build_qr_b64(qr_url)
     auto_sign_date = _format_value(
         _deep_get(request_ctx, "request.submitted_at") or _deep_get(request_ctx, "request.created_at"),
@@ -1060,9 +1175,20 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
             "agreed_name": str(layout_signatures.get("agreed_name") or ""),
         }
 
+    generated_at = utcnow().isoformat()
+    barcode_value = build_unique_barcode_value(
+        [
+            "PMM",
+            "REQ",
+            _deep_get(request_ctx, "request.request_number") or _deep_get(request_ctx, "request.id"),
+            generated_at,
+        ]
+    )
+    barcode_b64 = build_code39_png_b64(barcode_value)
+
     return {
         "layout": template_version.get("layout_json") or _default_layout_json(),
-        "service": template_version.get("service_block_json") or _default_service_block_json(),
+        "service": _normalize_service_block_json(template_version.get("service_block_json")),
         "request": request_ctx.get("request") or {},
         "department": request_ctx.get("department") or {},
         "issue": request_ctx.get("issue") or {},
@@ -1074,11 +1200,14 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
         "header_fields": header_fields,
         "totals_fields": totals_fields,
         "service_fields": service_fields,
-        "generated_at": utcnow().isoformat(),
+        "generated_at": generated_at,
         "auto_sign_date": auto_sign_date,
         "use_department_signatures": use_department_signatures,
         "signatures": resolved_signatures,
+        "qr_url": qr_url,
         "qr_b64": qr_b64,
+        "barcode_value": barcode_value,
+        "barcode_b64": barcode_b64,
         "has_debt": bool(_deep_get(request_ctx, "request.has_debt")),
         "debt_ab_liters": float(_deep_get(request_ctx, "computed.debt_ab_liters") or 0.0),
         "debt_dp_liters": float(_deep_get(request_ctx, "computed.debt_dp_liters") or 0.0),
@@ -1090,6 +1219,106 @@ def render_pdf_from_snapshot(snapshot: dict[str, Any], *, base_url: str) -> byte
         raise HTTPException(status_code=503, detail=f"PDF service is unavailable: {_WEASYPRINT_IMPORT_ERROR}")
     doc = _build_doc_view(snapshot, base_url=base_url)
     html = jinja_env.get_template("request_form_builder.html").render(doc=doc)
+    return HTML(string=html).write_pdf()
+
+
+def _request_status_label(status: str | None) -> str:
+    mapping = {
+        "DRAFT": "Чернетка",
+        "SUBMITTED": "Подано",
+        "APPROVED": "Затверджено",
+        "ISSUED_BY_OPERATOR": "Видано оператором",
+        "POSTED": "Проведено",
+        "REJECTED": "Відхилено",
+        "CANCELED": "Скасовано",
+    }
+    key = str(status or "").strip().upper()
+    return mapping.get(key, key or "—")
+
+
+async def build_request_issue_act_pdf(
+    db: AsyncSession,
+    *,
+    request_id: int,
+) -> bytes:
+    if HTML is None:
+        raise HTTPException(status_code=503, detail=f"PDF service is unavailable: {_WEASYPRINT_IMPORT_ERROR}")
+
+    req = await _load_request_for_print(db, request_id)
+    issue = req.stock_issue
+    if issue is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Акт ще не сформовано. Підтвердіть отримання підрозділом.",
+        )
+
+    line_rows: list[dict[str, Any]] = []
+    for idx, line in enumerate(issue.lines or [], start=1):
+        line_rows.append(
+            {
+                "row_no": idx,
+                "fuel_type": line.fuel_type.value if line.fuel_type else "—",
+                "requested_liters": float(line.requested_liters or 0.0),
+                "requested_kg": float(line.requested_kg or 0.0),
+                "issued_liters": float(line.issued_liters or 0.0),
+                "issued_kg": float(line.issued_kg or 0.0),
+                "missing_liters": float(line.missing_liters or 0.0),
+                "missing_kg": float(line.missing_kg or 0.0),
+            }
+        )
+
+    if not line_rows:
+        line_rows.append(
+            {
+                "row_no": 1,
+                "fuel_type": issue.fuel_type.value if issue.fuel_type else "—",
+                "requested_liters": float(issue.issue_liters or 0.0),
+                "requested_kg": float(issue.issue_kg or 0.0),
+                "issued_liters": float(issue.issue_liters or 0.0),
+                "issued_kg": float(issue.issue_kg or 0.0),
+                "missing_liters": float(issue.debt_liters or 0.0),
+                "missing_kg": float(issue.debt_kg or 0.0),
+            }
+        )
+
+    requested_liters_total = round(sum(float(r["requested_liters"]) for r in line_rows), 2)
+    requested_kg_total = round(sum(float(r["requested_kg"]) for r in line_rows), 2)
+    issued_liters_total = round(sum(float(r["issued_liters"]) for r in line_rows), 2)
+    issued_kg_total = round(sum(float(r["issued_kg"]) for r in line_rows), 2)
+    missing_liters_total = round(sum(float(r["missing_liters"]) for r in line_rows), 2)
+    missing_kg_total = round(sum(float(r["missing_kg"]) for r in line_rows), 2)
+
+    generated_at = utcnow().isoformat()
+    barcode_value = build_unique_barcode_value(
+        [
+            "PMM",
+            "ACT",
+            issue.issue_doc_no or req.request_number or request_id,
+            generated_at,
+        ]
+    )
+    barcode_b64 = build_code39_png_b64(barcode_value)
+
+    doc = {
+        "request_number": req.request_number,
+        "department_name": req.department.name if req.department else f"Підрозділ #{req.department_id}",
+        "issue_doc_no": issue.issue_doc_no,
+        "issue_status": _request_status_label(req.status.value if req.status else None),
+        "posted_at": issue.posted_at.isoformat() if issue.posted_at else None,
+        "generated_at": generated_at,
+        "barcode_value": barcode_value,
+        "barcode_b64": barcode_b64,
+        "rows": line_rows,
+        "totals": {
+            "requested_liters": requested_liters_total,
+            "requested_kg": requested_kg_total,
+            "issued_liters": issued_liters_total,
+            "issued_kg": issued_kg_total,
+            "missing_liters": missing_liters_total,
+            "missing_kg": missing_kg_total,
+        },
+    }
+    html = jinja_env.get_template("request_issue_act.html").render(doc=doc)
     return HTML(string=html).write_pdf()
 
 
@@ -1243,16 +1472,18 @@ async def ensure_default_template(db: AsyncSession) -> None:
     ).scalars().first()
     if template:
         changed = False
+        invalidated_version_ids: set[str] = set()
         for v in template.versions or []:
-            cols = v.table_columns_json or []
-            has_non_request_sources = any(not str(c.get("source") or "").startswith("request.") for c in cols if isinstance(c, dict))
-            if has_non_request_sources:
-                v.table_columns_json = _default_columns_json()
+            cols = v.table_columns_json if isinstance(v.table_columns_json, list) else []
+            default_cols = _default_columns_json()
+            normalized_default = [_normalize_column(dict(c), idx) for idx, c in enumerate(default_cols)]
+            if not cols:
+                v.table_columns_json = normalized_default
                 changed = True
+                invalidated_version_ids.add(v.id)
             else:
                 cols_changed = False
                 normalized_cols: list[dict[str, Any]] = []
-                default_cols = _default_columns_json()
                 for idx, col in enumerate(cols):
                     if not isinstance(col, dict):
                         fallback = dict(default_cols[idx]) if idx < len(default_cols) else dict(default_cols[-1])
@@ -1263,13 +1494,31 @@ async def ensure_default_template(db: AsyncSession) -> None:
                     patched = dict(col)
                     patched.setdefault("text_style", "normal")
                     patched.setdefault("font_size_pt", 11)
-                    normalized = _normalize_column(patched, idx)
+                    try:
+                        normalized = _normalize_column(patched, idx)
+                    except HTTPException:
+                        fallback = dict(default_cols[idx]) if idx < len(default_cols) else dict(default_cols[-1])
+                        fallback["id"] = str(col.get("id") or f"col_{idx + 1}")
+                        normalized = _normalize_column(fallback, idx)
+                        cols_changed = True
                     normalized_cols.append(normalized)
                     if normalized != col:
                         cols_changed = True
-                if cols_changed:
+
+                if _is_legacy_request_table(normalized_cols):
+                    if normalized_cols != normalized_default:
+                        v.table_columns_json = normalized_default
+                        changed = True
+                        invalidated_version_ids.add(v.id)
+                elif cols_changed:
                     v.table_columns_json = normalized_cols
                     changed = True
+                    invalidated_version_ids.add(v.id)
+            normalized_service_block = _normalize_service_block_json(v.service_block_json)
+            if normalized_service_block != (v.service_block_json or {}):
+                v.service_block_json = normalized_service_block
+                changed = True
+                invalidated_version_ids.add(v.id)
             layout = v.layout_json or {}
             page = layout.get("page") if isinstance(layout, dict) else {}
             orientation = str((page or {}).get("orientation") or "").lower()
@@ -1280,6 +1529,7 @@ async def ensure_default_template(db: AsyncSession) -> None:
                 layout["page"] = page
                 v.layout_json = layout
                 changed = True
+                invalidated_version_ids.add(v.id)
             if isinstance(v.layout_json, dict):
                 layout = dict(v.layout_json)
                 typography = dict(layout.get("typography") or {})
@@ -1329,6 +1579,22 @@ async def ensure_default_template(db: AsyncSession) -> None:
                     layout["signatures"] = signatures
                     v.layout_json = layout
                     changed = True
+                    invalidated_version_ids.add(v.id)
+        if invalidated_version_ids:
+            cached_artifacts = (
+                await db.execute(
+                    select(PrintArtifact).where(PrintArtifact.template_version_id.in_(list(invalidated_version_ids)))
+                )
+            ).scalars().all()
+            for artifact in cached_artifacts:
+                try:
+                    path = Path(str(artifact.file_path)).expanduser().resolve()
+                    if path.exists():
+                        path.unlink()
+                except Exception:
+                    pass
+            await db.execute(delete(PrintArtifact).where(PrintArtifact.template_version_id.in_(list(invalidated_version_ids))))
+            await db.execute(delete(RequestPrintSnapshot).where(RequestPrintSnapshot.template_version_id.in_(list(invalidated_version_ids))))
         if changed:
             await db.flush()
         return

@@ -83,15 +83,28 @@ async def upsert_for_department(
     return row
 
 
-def is_signature_complete(row: DepartmentPrintSignature | None) -> bool:
+def is_department_approval_complete(row: DepartmentPrintSignature | None) -> bool:
     if row is None:
         return False
     return bool(
         str(row.approval_position or "").strip()
         and str(row.approval_name or "").strip()
-        and str(row.agreed_position or "").strip()
+    )
+
+
+def is_admin_agreed_complete(row: DepartmentPrintSignature | None) -> bool:
+    if row is None:
+        return False
+    return bool(
+        str(row.agreed_position or "").strip()
         and str(row.agreed_name or "").strip()
     )
+
+
+def is_signature_complete(row: DepartmentPrintSignature | None) -> bool:
+    # Legacy helper. Keep behavior explicit for callers that still rely on
+    # "both sides complete".
+    return is_department_approval_complete(row) and is_admin_agreed_complete(row)
 
 
 def row_to_payload(row: DepartmentPrintSignature | None) -> dict[str, str]:

@@ -42,6 +42,12 @@ class DepartmentPrintSignatureDeptUpdate(BaseModel):
     approval_name: str = ""
 
 
+class DepartmentPrintSignatureAdminUpdate(BaseModel):
+    agreed_title: str = "ПОГОДЖЕНО:"
+    agreed_position: str = ""
+    agreed_name: str = ""
+
+
 class DepartmentPrintSignatureOut(DepartmentPrintSignatureBase):
     id: int
     department_id: int

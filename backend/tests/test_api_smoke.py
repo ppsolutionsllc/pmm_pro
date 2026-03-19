@@ -519,3 +519,130 @@ def test_confirm_ab_dp_split_and_debt_without_negative_balance(client: TestClien
     for row in balance.json():
         assert float(row.get("balance_liters", 0.0)) >= -1e-6
         assert float(row.get("balance_kg", 0.0)) >= -1e-6
+
+
+def test_submit_requires_only_department_signature_block(client: TestClient):
+    admin = _auth_headers(client, "admin", "AdminPass_123")
+    dept_id = _create_department(client, admin, "Dept Signatures")
+
+    _create_user(
+        client,
+        admin,
+        login="dept_user_sign",
+        password="DeptSign_123",
+        role="DEPT_USER",
+        department_id=dept_id,
+    )
+
+    vehicle_res = client.post(
+        "/api/v1/vehicles",
+        json={
+            "department_id": dept_id,
+            "brand": "KRAZ",
+            "identifier": "SGN-001",
+            "fuel_type": "АБ",
+            "consumption_l_per_100km": 25.0,
+            "is_active": True,
+        },
+        headers=admin,
+    )
+    assert vehicle_res.status_code == 200, vehicle_res.text
+    vehicle_id = int(vehicle_res.json()["id"])
+
+    pa_res = client.post(
+        "/api/v1/settings/planned-activities",
+        json={"name": "Підготовка", "is_active": True},
+        headers=admin,
+    )
+    assert pa_res.status_code == 200, pa_res.text
+    planned_activity_id = int(pa_res.json()["id"])
+
+    dept_headers = _auth_headers(client, "dept_user_sign", "DeptSign_123")
+    sig_res = client.put(
+        "/api/v1/departments/me/print-signatures",
+        json={
+            "approval_title": "З розрахунком згоден:",
+            "approval_position": "Начальник служби ПММ",
+            "approval_name": "Петренко П.П.",
+        },
+        headers=dept_headers,
+    )
+    assert sig_res.status_code == 200, sig_res.text
+    assert sig_res.json()["approval_position"] == "Начальник служби ПММ"
+    # submit must not require ADMIN "ПОГОДЖЕНО" block
+    assert sig_res.json()["agreed_position"] == ""
+
+    req_res = client.post(
+        "/api/v1/requests",
+        json={"department_id": dept_id, "persons_involved_count": 5, "training_days_count": 2},
+        headers=dept_headers,
+    )
+    assert req_res.status_code == 200, req_res.text
+    req_id = int(req_res.json()["id"])
+
+    item_res = client.post(
+        f"/api/v1/requests/{req_id}/items",
+        json={
+            "planned_activity_id": planned_activity_id,
+            "vehicle_id": vehicle_id,
+            "route_is_manual": True,
+            "route_text": "ППД - Район - ППД",
+            "distance_km_per_trip": 10.0,
+            "persons_involved_count": 5,
+            "training_days_count": 2,
+        },
+        headers=dept_headers,
+    )
+    assert item_res.status_code == 200, item_res.text
+
+    submit_res = client.post(f"/api/v1/requests/{req_id}/submit", headers=dept_headers)
+    assert submit_res.status_code == 200, submit_res.text
+    assert submit_res.json()["status"] == "SUBMITTED"
+
+
+def test_admin_updates_only_agreed_signature_block(client: TestClient):
+    admin = _auth_headers(client, "admin", "AdminPass_123")
+    dept_id = _create_department(client, admin, "Dept Admin Agreement")
+
+    _create_user(
+        client,
+        admin,
+        login="dept_user_adminsig",
+        password="DeptAdminSig_123",
+        role="DEPT_USER",
+        department_id=dept_id,
+    )
+    dept_headers = _auth_headers(client, "dept_user_adminsig", "DeptAdminSig_123")
+
+    dept_set = client.put(
+        "/api/v1/departments/me/print-signatures",
+        json={
+            "approval_title": "З розрахунком згоден:",
+            "approval_position": "Командир підрозділу",
+            "approval_name": "Іваненко І.І.",
+        },
+        headers=dept_headers,
+    )
+    assert dept_set.status_code == 200, dept_set.text
+
+    # ADMIN endpoint should update only agreed* fields and keep approval* untouched.
+    admin_set = client.put(
+        f"/api/v1/departments/{dept_id}/print-signatures",
+        json={
+            "agreed_title": "ПОГОДЖЕНО:",
+            "agreed_position": "Заступник командира",
+            "agreed_name": "Сидоренко С.С.",
+            "approval_position": "SHOULD_NOT_OVERRIDE",
+            "approval_name": "SHOULD_NOT_OVERRIDE",
+        },
+        headers=admin,
+    )
+    assert admin_set.status_code == 200, admin_set.text
+
+    row = client.get(f"/api/v1/departments/{dept_id}/print-signatures", headers=admin)
+    assert row.status_code == 200, row.text
+    payload = row.json()
+    assert payload["approval_position"] == "Командир підрозділу"
+    assert payload["approval_name"] == "Іваненко І.І."
+    assert payload["agreed_position"] == "Заступник командира"
+    assert payload["agreed_name"] == "Сидоренко С.С."

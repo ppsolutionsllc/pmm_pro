@@ -177,6 +177,10 @@ const MyRequests: React.FC = () => {
                   <span className="text-gray-500">Створено</span>
                   <span className="text-gray-300">{r.created_at ? new Date(r.created_at).toLocaleDateString('uk-UA') : '—'}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Акт №</span>
+                  <span className="text-gray-300">{r.issue_doc_no || '—'}</span>
+                </div>
               </div>
             </div>
           ))}

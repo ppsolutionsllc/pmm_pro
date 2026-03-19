@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <style>
     * {
-      font-family: "Times New Roman", serif !important;
+      font-family: "Times New Roman" !important;
     }
 
     @page {
@@ -23,7 +23,7 @@
     }
 
     body {
-      font-family: "Times New Roman", serif;
+      font-family: "Times New Roman";
       color: #000;
       font-size: var(--doc-font-size, 11pt);
       font-weight: var(--doc-font-weight, 400);
@@ -34,6 +34,8 @@
 
     .sheet {
       width: 100%;
+      box-sizing: border-box;
+      padding-bottom: 58mm;
     }
 
     .to-line {
@@ -65,6 +67,7 @@
 
     .form-table {
       width: 100%;
+      max-width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
       border: 2px solid #000;
@@ -75,8 +78,12 @@
     .form-table td {
       border: 1px solid #000;
       padding: 4px 6px;
-      vertical-align: middle;
+      vertical-align: top;
+      white-space: normal;
       word-break: break-word;
+      overflow-wrap: anywhere;
+      word-wrap: break-word;
+      hyphens: auto;
     }
 
     .form-table thead th {
@@ -126,7 +133,7 @@
     .form-table .totals td {
       border-top: 2px solid #000;
       font-weight: 700;
-      font-size: 12pt;
+      font-size: 11pt;
     }
 
     .signatures {
@@ -150,10 +157,29 @@
     }
 
     .service-box {
-      margin-top: 12px;
-      border: 1px solid #000;
-      padding: 8px 10px;
-      page-break-inside: avoid;
+      border-top: 1px solid #000;
+      padding-top: 6px;
+      display: table;
+      width: 100%;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 14mm;
+      background: #fff;
+    }
+
+    .service-meta {
+      display: table-cell;
+      width: 78%;
+      vertical-align: top;
+      padding-right: 10px;
+    }
+
+    .service-qr {
+      display: table-cell;
+      width: 22%;
+      text-align: center;
+      vertical-align: top;
     }
 
     .service-title {
@@ -163,22 +189,65 @@
       text-transform: uppercase;
     }
 
-    .service-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
+    .service-inline {
+      font-size: 10pt;
+      line-height: 1.25;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
-    .service-table td {
-      border-bottom: 1px solid #000;
-      padding: 3px 4px;
-      font-size: 10.5pt;
-      vertical-align: top;
+    .doc-barcode {
+      margin-top: 8px;
     }
 
-    .service-table td:first-child {
-      width: 34%;
+    .doc-barcode-img {
+      width: 260px;
+      height: 62px;
+      object-fit: fill;
+      display: block;
+      border: 1px solid #000;
+      background: #fff;
+    }
+
+    .doc-barcode-value {
+      margin-top: 2px;
+      font-size: 8pt;
+      letter-spacing: 0.4px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .service-item {
+      display: inline;
+      margin-right: 10px;
+    }
+
+    .service-item strong {
       font-weight: 700;
+    }
+
+    .qr-title {
+      font-size: 9pt;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .qr-image {
+      width: 90px;
+      height: 90px;
+      object-fit: contain;
+      border: 1px solid #000;
+      padding: 2px;
+      background: #fff;
+      display: inline-block;
+    }
+
+    .qr-link {
+      font-size: 8.5pt;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -294,34 +363,34 @@
 
     {% if doc.service %}
     <div class="service-box">
-      <div class="service-title">Службова інформація</div>
-      <table class="service-table">
-        <tbody>
+      <div class="service-meta">
+        <div class="service-title">Службова інформація</div>
+        <div class="service-inline">
           {% if doc.service.show_request_number %}
-          <tr><td>Номер заявки</td><td>{{ doc.request.request_number or "—" }}</td></tr>
+          <span class="service-item"><strong>Номер заявки:</strong> {{ doc.request.request_number or "—" }}</span>
           {% endif %}
           {% if doc.service.show_department %}
-          <tr><td>Підрозділ</td><td>{{ doc.department.name or "—" }}</td></tr>
-          {% endif %}
-          {% if doc.service.show_status %}
-          <tr><td>Статус заявки</td><td>{{ doc.request.status or "—" }}</td></tr>
-          {% endif %}
-          {% if doc.service.show_issue_doc_no %}
-          <tr><td>Номер акта</td><td>{{ doc.issue.issue_doc_no or "—" }}</td></tr>
+          <span class="service-item"><strong>Підрозділ:</strong> {{ doc.department.name or "—" }}</span>
           {% endif %}
           {% if doc.service.show_system_version %}
-          <tr><td>Версія системи</td><td>{{ doc.system.backend_version or "—" }}</td></tr>
-          {% endif %}
-          {% if doc.service.show_audit_users %}
-          <tr><td>Хто затвердив</td><td>{{ doc.audit.approved_by or "—" }}</td></tr>
-          <tr><td>Хто видав</td><td>{{ doc.audit.issued_by or "—" }}</td></tr>
-          <tr><td>Хто підтвердив</td><td>{{ doc.audit.confirmed_by or "—" }}</td></tr>
+          <span class="service-item"><strong>Версія системи:</strong> {{ doc.system.backend_version or "—" }}</span>
           {% endif %}
           {% if doc.service.show_generated_at %}
-          <tr><td>Сформовано</td><td>{{ doc.generated_at or "—" }}</td></tr>
+          <span class="service-item"><strong>Сформовано:</strong> {{ doc.generated_at or "—" }}</span>
           {% endif %}
-        </tbody>
-      </table>
+        </div>
+        {% if doc.barcode_b64 %}
+        <div class="doc-barcode">
+          <img class="doc-barcode-img" src="data:image/png;base64,{{ doc.barcode_b64 }}" alt="Document barcode" />
+          <div class="doc-barcode-value">{{ doc.barcode_value or "" }}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% if doc.service.show_qr and doc.qr_b64 %}
+      <div class="service-qr">
+        <img class="qr-image" src="data:image/png;base64,{{ doc.qr_b64 }}" alt="QR code" />
+      </div>
+      {% endif %}
     </div>
     {% endif %}
   </div>

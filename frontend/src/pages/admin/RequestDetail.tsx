@@ -7,7 +7,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import Modal from '../../components/Modal';
 import { useToast } from '../../components/Toast';
 import { api } from '../../api';
-import { ArrowLeft, Edit, CheckCircle, Printer, XCircle } from 'lucide-react';
+import { ArrowLeft, Edit, CheckCircle, Printer, XCircle, FileText } from 'lucide-react';
 
 const RequestDetail: React.FC = () => {
   const { id } = useParams();
@@ -101,12 +101,23 @@ const RequestDetail: React.FC = () => {
   const handlePrint = async () => {
     if (!id) return;
     try {
-      const artifact = await api.printRequestPdf(Number(id), {});
+      const artifact = await api.printRequestPdf(Number(id), { force_regenerate: true });
       const blob = await api.downloadPrintArtifact(artifact.artifact_id);
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
     } catch (e: any) {
       toast(e.message || 'Помилка при друку', 'error');
+    }
+  };
+
+  const handlePrintAct = async () => {
+    if (!id) return;
+    try {
+      const blob = await api.printRequestActPdf(Number(id));
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (e: any) {
+      toast(e.message || 'Помилка при друку акта', 'error');
     }
   };
 
@@ -162,6 +173,7 @@ const RequestDetail: React.FC = () => {
           <div className="flex gap-2">
             <button onClick={() => navigate(-1)} className="btn-ghost"><ArrowLeft size={16} /> Назад</button>
             <button onClick={handlePrint} className="btn-secondary"><Printer size={16} /> Друк</button>
+            <button onClick={handlePrintAct} className="btn-secondary"><FileText size={16} /> Друк акта</button>
           </div>
         }
       />
@@ -213,6 +225,25 @@ const RequestDetail: React.FC = () => {
             <button onClick={() => setRejectOpen(true)} className="btn-danger"><XCircle size={16} /> Відхилити</button>
           </div>
         )}
+
+        <div className="card h-fit">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Акт видачі</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-xs text-gray-500">Номер акта</div>
+              <div className="text-gray-200 font-medium">{req.issue_doc_no || '—'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">Дата проведення</div>
+              <div className="text-gray-200">{req.stock_posted_at ? new Date(req.stock_posted_at).toLocaleString('uk-UA') : '—'}</div>
+            </div>
+          </div>
+          {!req.issue_doc_no && (
+            <p className="text-xs text-gray-500 mt-3">
+              Акт з&apos;явиться після підтвердження підрозділом отримання пального.
+            </p>
+          )}
+        </div>
 
         <div className="card h-fit">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Таймлайн</h3>

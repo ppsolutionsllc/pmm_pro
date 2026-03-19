@@ -91,8 +91,13 @@ const DepartmentDetail: React.FC = () => {
   const saveSignatures = async () => {
     setSignaturesSaving(true);
     try {
-      await api.updateDepartmentPrintSignatures(Number(id), signatures);
-      toast('Підписантів підрозділу збережено', 'success');
+      await api.updateDepartmentPrintSignatures(Number(id), {
+        agreed_title: signatures.agreed_title,
+        agreed_position: signatures.agreed_position,
+        agreed_name: signatures.agreed_name,
+      });
+      toast('Блок «ПОГОДЖЕНО» збережено', 'success');
+      load();
     } catch (e: any) {
       toast(e.message || 'Не вдалося зберегти підписантів', 'error');
     } finally {
@@ -136,7 +141,7 @@ const DepartmentDetail: React.FC = () => {
                 <input
                   className="input-field"
                   value={signatures.approval_title}
-                  onChange={(e) => setSignatures({ ...signatures, approval_title: e.target.value })}
+                  disabled
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -145,7 +150,7 @@ const DepartmentDetail: React.FC = () => {
                   <input
                     className="input-field"
                     value={signatures.approval_position}
-                    onChange={(e) => setSignatures({ ...signatures, approval_position: e.target.value })}
+                    disabled
                   />
                 </div>
                 <div>
@@ -153,9 +158,12 @@ const DepartmentDetail: React.FC = () => {
                   <input
                     className="input-field"
                     value={signatures.approval_name}
-                    onChange={(e) => setSignatures({ ...signatures, approval_name: e.target.value })}
+                    disabled
                   />
                 </div>
+              </div>
+              <div className="text-xs text-gray-500">
+                Блок «З розрахунком згоден» заповнює підрозділ у своєму профілі.
               </div>
               <div>
                 <label className="label">ПОГОДЖЕНО (заголовок)</label>
@@ -185,7 +193,7 @@ const DepartmentDetail: React.FC = () => {
               </div>
               <div>
                 <button className="btn-primary" onClick={saveSignatures} disabled={signaturesSaving}>
-                  {signaturesSaving ? 'Збереження...' : 'Зберегти підписантів'}
+                  {signaturesSaving ? 'Збереження...' : 'Зберегти блок «ПОГОДЖЕНО»'}
                 </button>
               </div>
             </div>

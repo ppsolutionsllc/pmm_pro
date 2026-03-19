@@ -55,10 +55,15 @@ export const api = {
     fetch(`${BASE}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ username, password }),
+      body: new URLSearchParams({ username: username.trim(), password }),
     }).then(async r => {
-      if (!r.ok) throw new Error('Невірний логін або пароль');
-      return r.json();
+      if (r.ok) return r.json();
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      const detail = String(err?.detail || '').trim();
+      if (r.status === 429) throw new Error('Забагато спроб входу. Спробуйте пізніше.');
+      if (detail === 'User is inactive') throw new Error('Користувача деактивовано. Зверніться до адміністратора.');
+      if (detail) throw new Error(detail);
+      throw new Error('Невірний логін або пароль');
     }),
   me: () => request('/me'),
 
@@ -79,6 +84,8 @@ export const api = {
   // Users
   getUsers: (params?: { role?: string; department_id?: number }) => request(withQuery('/users', params)),
   createUser: (data: any) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: number, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUser: (id: number) => request(`/users/${id}`, { method: 'DELETE' }),
 
   // Vehicles
   getVehicles: () => request('/vehicles'),
@@ -130,9 +137,9 @@ export const api = {
 
   // Stock
   createReceipt: (data: any) => request('/stock/receipts', { method: 'POST', body: JSON.stringify(data) }),
-  getReceipts: () => request('/stock/receipts'),
+  getReceipts: (params?: { date_from?: string; date_to?: string }) => request(withQuery('/stock/receipts', params)),
   getBalance: () => request('/stock/balance'),
-  getLedger: () => request('/stock/ledger'),
+  getLedger: (params?: { date_from?: string; date_to?: string }) => request(withQuery('/stock/ledger', params)),
   createStockAdjustment: (data: any, idempotencyKey?: string) =>
     request('/stock/adjustments', {
       method: 'POST',
@@ -167,6 +174,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data || {}),
     }),
+  printRequestActPdf: (id: number) => requestBlob(`/requests/${id}/print/act`),
   downloadPrintArtifact: (artifactId: string) => requestBlob(`/print-artifacts/${artifactId}/download`),
   listPdfTemplates: () => request('/admin/pdf-templates'),
   createPdfTemplate: (data: { name: string; scope?: string; is_active?: boolean }) =>
@@ -256,6 +264,7 @@ export const api = {
 
   // reports / export jobs
   getVehicleConsumptionReport: (filters?: any) => request(withQuery('/reports/vehicle-consumption', filters)),
+  getDepartmentsReport: (filters?: any) => request(withQuery('/reports/departments', filters)),
   createVehicleReportExportJob: (format = 'XLSX', filters?: any) =>
     request('/jobs/exports/vehicle-report', { method: 'POST', body: JSON.stringify({ format, filters: filters || {} }) }),
   getJob: (jobId: string) => request(`/jobs/${jobId}`),
