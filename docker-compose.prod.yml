@@ -67,8 +67,8 @@ services:
       BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-10}
       POSTING_ERROR_LOG_PATH: ${POSTING_ERROR_LOG_PATH:-/var/log/pmm/posting_errors.log}
     volumes:
-      - pmm_artifacts:${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
-      - pmm_backups:${BACKUP_DIR:-/var/lib/pmm/backups}
+      - pmm_artifacts:/var/lib/pmm/artifacts
+      - pmm_backups:/var/lib/pmm/backups
       - pmm_logs:/var/log/pmm
     depends_on:
       db:

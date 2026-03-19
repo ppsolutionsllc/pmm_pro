@@ -65,8 +65,8 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS}
       ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
     volumes:
-      - pmm_artifacts:${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
-      - pmm_backups:${BACKUP_DIR:-/var/lib/pmm/backups}
+      - pmm_artifacts:/var/lib/pmm/artifacts
+      - pmm_backups:/var/lib/pmm/backups
       - pmm_logs:/var/log/pmm
     depends_on:
       db:
