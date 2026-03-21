@@ -38,6 +38,7 @@ services:
       DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
       BACKEND_WORKERS: ${BACKEND_WORKERS:-3}
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:-pmm.66br.pp.ua}
       FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
       FIRST_ADMIN_FULL_NAME: ${FIRST_ADMIN_FULL_NAME:-First Administrator}
@@ -72,11 +73,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS -H 'Host: pmm.66br.pp.ua' http://127.0.0.1:8000/ready >/dev/null || exit 1",
-        ]
+      test: ["CMD", "/app/scripts/healthcheck-ready.sh"]
       interval: 15s
       timeout: 5s
       retries: 8

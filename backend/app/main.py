@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager, suppress
 from collections import deque
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from urllib.parse import urlparse
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -135,8 +136,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-if settings.allowed_hosts and "*" not in settings.allowed_hosts:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+
+
+def _normalize_host(value: str) -> str:
+    token = (value or "").strip().lower()
+    if not token:
+        return ""
+    if token == "*":
+        return token
+    if "://" in token:
+        parsed = urlparse(token)
+        token = (parsed.netloc or parsed.path or "").strip().lower()
+    token = token.split("/", 1)[0].strip()
+    return token
+
+
+def _trusted_hosts_with_internal_defaults(values: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for raw in values or []:
+        host = _normalize_host(str(raw))
+        if host and host not in cleaned:
+            cleaned.append(host)
+    if "*" in cleaned:
+        return ["*"]
+    for internal in (
+        "127.0.0.1",
+        "127.0.0.1:8000",
+        "localhost",
+        "localhost:8000",
+        "backend",
+        "backend:8000",
+        "frontend",
+        "frontend:80",
+    ):
+        if internal not in cleaned:
+            cleaned.append(internal)
+    return cleaned
+
+
+trusted_hosts = _trusted_hosts_with_internal_defaults(settings.allowed_hosts)
+if trusted_hosts and "*" not in trusted_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
+logger.info("Trusted hosts configured: %s", ",".join(trusted_hosts))
 
 
 @app.middleware("http")
