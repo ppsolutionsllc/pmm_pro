@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pmm}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?MANUAL_ACTION_REQUIRED__SET_POSTGRES_PASSWORD_IN_ENV_PROD_OR_COOLIFY_SECRET}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?MANUAL_ACTION_REQUIRED__SET_POSTGRES_PASSWORD_IN_DOKPLOY_ENV_OR_SECRET}
       POSTGRES_DB: ${POSTGRES_DB:-pmm}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -14,22 +14,17 @@ services:
       timeout: 5s
       retries: 8
       start_period: 15s
-    networks:
-      - internal
 
   backend:
     image: ${PMM_BACKEND_IMAGE:-pmm-backend:${APP_VERSION:-dev}}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     restart: unless-stopped
-    command: >-
-      sh -c "gunicorn app.main:app
-      -k uvicorn.workers.UvicornWorker
-      -w ${BACKEND_WORKERS:-3}
-      -b 0.0.0.0:8000
-      --access-logfile -
-      --error-logfile -"
+    command: ["/app/scripts/start-backend.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
-      JWT_SECRET: ${JWT_SECRET:?MANUAL_ACTION_REQUIRED__SET_JWT_SECRET_IN_ENV_PROD_OR_COOLIFY_SECRET__MIN_32_CHARS}
+      JWT_SECRET: ${JWT_SECRET:?MANUAL_ACTION_REQUIRED__SET_JWT_SECRET_IN_DOKPLOY_ENV_OR_SECRET__MIN_32_CHARS}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env.prod}
@@ -41,6 +36,8 @@ services:
       DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-30}
       DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-1800}
       DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
+      BACKEND_WORKERS: ${BACKEND_WORKERS:-3}
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:-pmm.66br.pp.ua}
       FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
@@ -80,8 +77,8 @@ services:
       timeout: 5s
       retries: 8
       start_period: 30s
-    networks:
-      - internal
+    expose:
+      - "8000"
 
   migrator:
     image: ${PMM_BACKEND_IMAGE:-pmm-backend:${APP_VERSION:-dev}}
@@ -89,7 +86,7 @@ services:
     command: ["sh", "-c", "alembic upgrade head"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
-      JWT_SECRET: ${JWT_SECRET:?MANUAL_ACTION_REQUIRED__SET_JWT_SECRET_IN_ENV_PROD_OR_COOLIFY_SECRET__MIN_32_CHARS}
+      JWT_SECRET: ${JWT_SECRET:?MANUAL_ACTION_REQUIRED__SET_JWT_SECRET_IN_DOKPLOY_ENV_OR_SECRET__MIN_32_CHARS}
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env.prod}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in .env.prod}
       ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
@@ -102,21 +99,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - internal
 
   frontend:
     image: ${PMM_FRONTEND_IMAGE:-pmm-frontend:${APP_VERSION:-dev}}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
     restart: unless-stopped
     expose:
       - "80"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.pmm-frontend.rule=Host(`${DOMAIN:?Set DOMAIN in .env.prod}`)"
-      - "traefik.http.routers.pmm-frontend.entrypoints=https"
-      - "traefik.http.routers.pmm-frontend.tls=true"
-      - "traefik.http.routers.pmm-frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.pmm-frontend.loadbalancer.server.port=80"
     depends_on:
       backend:
         condition: service_healthy
@@ -126,9 +117,6 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
-    networks:
-      - internal
-      - coolify
 
 volumes:
   pgdata:
@@ -136,9 +124,3 @@ volumes:
   pmm_artifacts:
   pmm_backups:
   pmm_logs:
-
-networks:
-  internal:
-    driver: bridge
-  coolify:
-    external: true

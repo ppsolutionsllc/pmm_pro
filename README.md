@@ -13,7 +13,7 @@
 - `backend/app/` — API та бізнес-логіка.
 - `backend/alembic/` — міграції.
 - `docker-compose.yml` — локальна dev-конфігурація.
-- `docker-compose.prod.yml` — production стек (legacy).
+- `docker-compose.prod.yml` — production стек для Dokploy / Docker Compose deploy з GitHub.
 - `docker-compose.coolify.yml` — production стек для Coolify.
 - `docs/` — документація.
 
@@ -51,8 +51,20 @@ docker compose up --build
 - Backend API: `http://localhost:8000`
 - OpenAPI: `http://localhost:8000/docs`
 
+## Production / Dokploy
+Для Dokploy (Docker Compose service) використовуйте `docker-compose.prod.yml`.
+Роутинг домену налаштовується через Dokploy UI (`Domains`), а не через Traefik labels у compose.
+
+Швидкий старт:
+1. В Dokploy оберіть repository + branch.
+2. Вкажіть compose path: `docker-compose.prod.yml`.
+3. Додайте required env змінні (мінімум: `POSTGRES_PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`, `FRONTEND_BASE_URL`, `ALLOWED_HOSTS`).
+4. У `Domains` прив'яжіть домен до сервісу `frontend` на container port `80`.
+
+Детально: [DOKPLOY_DEPLOY.md](docs/DOKPLOY_DEPLOY.md)
+
 ## Production / Coolify
-Використовуйте тільки `docker-compose.coolify.yml` як source of truth для production deploy у Coolify.
+Для Coolify використовуйте `docker-compose.coolify.yml`.
 Цільовий домен: `https://pmm.66br.pp.ua`.
 
 Ключові production env:
