@@ -9,6 +9,7 @@ BACKEND_WORKERS="${BACKEND_WORKERS:-3}"
 DATABASE_URL="${DATABASE_URL:-}"
 DB_READY_MAX_ATTEMPTS="${DB_READY_MAX_ATTEMPTS:-30}"
 DB_READY_SLEEP_SECONDS="${DB_READY_SLEEP_SECONDS:-2}"
+PG_ISREADY_URL=""
 
 ensure_writable_dir() {
   dir_path="$1"
@@ -32,10 +33,19 @@ if [ -z "${DATABASE_URL}" ]; then
   exit 1
 fi
 
+case "${DATABASE_URL}" in
+  postgresql+asyncpg://*)
+    PG_ISREADY_URL="postgresql://${DATABASE_URL#postgresql+asyncpg://}"
+    ;;
+  *)
+    PG_ISREADY_URL="${DATABASE_URL}"
+    ;;
+esac
+
 echo "[prod-entrypoint] waiting for database readiness"
 attempt=1
 while [ "${attempt}" -le "${DB_READY_MAX_ATTEMPTS}" ]; do
-  if pg_isready -d "${DATABASE_URL}" >/dev/null 2>&1; then
+  if pg_isready -d "${PG_ISREADY_URL}" >/dev/null 2>&1; then
     break
   fi
   if [ "${attempt}" -eq "${DB_READY_MAX_ATTEMPTS}" ]; then
