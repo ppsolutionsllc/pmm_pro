@@ -20,6 +20,7 @@ Routing is managed by Dokploy Domains UI. Manual Traefik labels in compose are i
   - `frontend` builds from `./frontend/Dockerfile` target `prod`
 - `db` now uses a direct stable image: `postgres:15`
 - `docker-compose.prod.yml` is self-contained and does not depend on `docker-compose.yml`
+- backend entrypoint waits for PostgreSQL and runs `alembic upgrade head` before starting `gunicorn`
 - Kept only internal ports with `expose`:
   - `frontend: 80`
   - `backend: 8000`
@@ -86,7 +87,8 @@ Run/check:
 
 ## Migration Note (from Old Deployment Logic)
 `migrate` remains in compose as an `ops` profile service and does not start during normal Dokploy deploy.
-Run migrations as a separate step when needed:
+Production startup is safe even without it, because backend applies migrations before app startup.
+Run migrations separately when needed:
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile ops run --rm migrate

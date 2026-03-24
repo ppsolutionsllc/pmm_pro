@@ -33,9 +33,10 @@
 - жодних bind mounts для коду
 - frontend збирається заздалегідь і віддається nginx
 - backend стартує через `gunicorn`, без autoreload
+- перед стартом backend у production автоматично чекає БД і виконує `alembic upgrade head`
 - dev-залежності не потрапляють у production image
 - назовні публікується тільки `frontend` через platform ingress / Dokploy domain routing
-- міграції виконуються окремою командою `make prod-migrate`
+- `make prod-migrate` лишається як ручна ops-команда для окремого прогону міграцій
 
 ## Persistent data
 
