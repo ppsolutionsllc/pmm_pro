@@ -259,6 +259,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ confirm }),
     }),
+  resetSystemData: (data: {
+    confirm: string;
+    admin_login: string;
+    admin_password: string;
+    admin_full_name?: string;
+    create_backup?: boolean;
+  }) => request('/settings/system/reset', { method: 'POST', body: JSON.stringify(data) }),
   deleteDbBackup: (filename: string) => request(`/settings/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
   downloadDbBackup: (filename: string) => requestBlob(`/settings/backups/${encodeURIComponent(filename)}/download`),
 

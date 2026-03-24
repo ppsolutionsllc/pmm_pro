@@ -260,6 +260,40 @@ def test_request_flow_to_posted_and_backup_endpoint(client: TestClient):
     assert restore_bad.status_code == 404
 
 
+def test_system_reset_recreates_clean_database_with_new_admin(client: TestClient):
+    admin = _auth_headers(client, "admin", "AdminPass_123")
+    _create_department(client, admin, "Department To Reset")
+
+    reset_res = client.post(
+        "/api/v1/settings/system/reset",
+        json={
+            "confirm": "RESET",
+            "admin_login": "admin_reset",
+            "admin_password": "ResetPass_123",
+            "admin_full_name": "Reset Administrator",
+            "create_backup": False,
+        },
+        headers=admin,
+    )
+    assert reset_res.status_code == 200, reset_res.text
+    payload = reset_res.json()
+    assert payload["ok"] is True
+    assert payload["admin_login"] == "admin_reset"
+
+    new_admin = _auth_headers(client, "admin_reset", "ResetPass_123")
+
+    users_res = client.get("/api/v1/users", headers=new_admin)
+    assert users_res.status_code == 200, users_res.text
+    users = users_res.json()
+    assert len(users) == 1
+    assert users[0]["login"] == "admin_reset"
+    assert users[0]["role"] == "ADMIN"
+
+    depts_res = client.get("/api/v1/departments", headers=new_admin)
+    assert depts_res.status_code == 200, depts_res.text
+    assert depts_res.json() == []
+
+
 def test_confirm_idempotent_and_single_active_rule(client: TestClient):
     admin = _auth_headers(client, "admin", "AdminPass_123")
     dept_id = _create_department(client, admin, "Dept Active Rule")

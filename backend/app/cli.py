@@ -10,6 +10,7 @@ from app.db.session import async_session
 from app.models.user import RoleEnum as UserRoleEnum
 from app.models.user import User
 from app.schemas import user as schema_user
+from app.services import reset_service
 
 
 def _resolve_value(cli_value: Optional[str], env_value: Optional[str]) -> str:
@@ -27,6 +28,20 @@ def _build_parser() -> argparse.ArgumentParser:
     create.add_argument("--login", default="", help="Admin login")
     create.add_argument("--password", default="", help="Admin password (min 8 chars)")
     create.add_argument("--full-name", default="", help="Admin full name")
+
+    reset = sub.add_parser(
+        "reset-database",
+        help="Drop all application data and bootstrap a new administrator",
+    )
+    reset.add_argument("--confirm", default="", help="Confirmation word RESET")
+    reset.add_argument("--admin-login", default="", help="New admin login")
+    reset.add_argument("--admin-password", default="", help="New admin password (min 8 chars)")
+    reset.add_argument("--admin-full-name", default="", help="New admin full name")
+    reset.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Skip creating a backup before reset",
+    )
     return parser
 
 
@@ -83,6 +98,34 @@ def main() -> int:
             parser.error("Password must be at least 8 characters long")
 
         return asyncio.run(_create_first_admin(login=login, password=password, full_name=full_name))
+
+    if args.command == "reset-database":
+        login = _resolve_value(args.admin_login, settings.first_admin_login)
+        password = _resolve_value(args.admin_password, settings.first_admin_password)
+        full_name = _resolve_value(args.admin_full_name, settings.first_admin_full_name) or "First Administrator"
+
+        if (args.confirm or "").strip().upper() != "RESET":
+            parser.error("Pass --confirm RESET to allow full database reset")
+        if not login:
+            parser.error("Admin login is required: pass --admin-login or set FIRST_ADMIN_LOGIN")
+        if not password:
+            parser.error("Admin password is required: pass --admin-password or set FIRST_ADMIN_PASSWORD")
+        if len(password) < 8:
+            parser.error("Admin password must be at least 8 characters long")
+
+        result = asyncio.run(
+            reset_service.reset_database(
+                admin_login=login,
+                admin_password=password,
+                admin_full_name=full_name,
+                create_backup=not bool(args.no_backup),
+            )
+        )
+        print(
+            f"Database reset complete. New admin: login={result['admin_login']}, "
+            f"backup={result.get('backup', {}).get('filename') if result.get('backup') else 'skipped'}"
+        )
+        return 0
 
     parser.error("Unknown command")
     return 1

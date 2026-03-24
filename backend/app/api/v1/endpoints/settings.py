@@ -16,6 +16,7 @@ from app.schemas import planned_activity as schema_planned
 from app.crud import settings as crud_settings
 from app.crud import app_settings as crud_app
 from app.crud import planned_activity as crud_planned
+from app.services import reset_service
 from app.api import deps
 
 router = APIRouter()
@@ -371,6 +372,21 @@ class FeatureSettings(BaseModel):
     enable_reservations: bool = False
 
 
+class SystemResetRequest(BaseModel):
+    confirm: str
+    admin_login: str
+    admin_password: str
+    admin_full_name: Optional[str] = None
+    create_backup: bool = True
+
+
+class SystemResetResponse(BaseModel):
+    ok: bool
+    admin_login: str
+    admin_full_name: Optional[str] = None
+    backup: Optional[dict] = None
+
+
 @router.get("/settings/features", response_model=FeatureSettings)
 async def get_feature_settings(
     db: AsyncSession = Depends(get_db),
@@ -388,3 +404,33 @@ async def set_feature_settings(
 ):
     await crud_app.set_setting(db, "features.enable_reservations", str(bool(data.enable_reservations)).lower())
     return data
+
+
+@router.post("/settings/system/reset", response_model=SystemResetResponse)
+async def reset_system_data(
+    data: SystemResetRequest,
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    if (data.confirm or "").strip().upper() != "RESET":
+        raise HTTPException(status_code=400, detail="Confirmation word must be RESET")
+    if not (data.admin_login or "").strip():
+        raise HTTPException(status_code=400, detail="Admin login is required")
+    if len(data.admin_password or "") < 8:
+        raise HTTPException(status_code=400, detail="Admin password must be at least 8 characters long")
+    if (data.admin_login or "").strip().lower() == str(current_user.login or "").strip().lower():
+        raise HTTPException(
+            status_code=400,
+            detail="New admin login must be different from the current login to invalidate active sessions",
+        )
+
+    try:
+        result = await reset_service.reset_database(
+            admin_login=data.admin_login,
+            admin_password=data.admin_password,
+            admin_full_name=data.admin_full_name or current_user.full_name or "First Administrator",
+            create_backup=bool(data.create_backup),
+        )
+    except reset_service.ResetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return SystemResetResponse(**result)

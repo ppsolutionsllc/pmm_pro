@@ -110,6 +110,9 @@ const SettingsSystem: React.FC = () => {
 
       {/* backup / restore */}
       <BackupRestore />
+
+      {/* destructive reset */}
+      <SystemResetPanel />
     </div>
   );
 };
@@ -724,6 +727,150 @@ function BackupRestore() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function SystemResetPanel() {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    admin_login: '',
+    admin_full_name: '',
+    admin_password: '',
+    admin_password_repeat: '',
+    confirm: '',
+    create_backup: true,
+  });
+  const [resetting, setResetting] = useState(false);
+
+  const onReset = async () => {
+    if (!form.admin_login.trim()) {
+      toast('Вкажіть логін нового адміністратора', 'warning');
+      return;
+    }
+    if (!form.admin_password) {
+      toast('Вкажіть пароль нового адміністратора', 'warning');
+      return;
+    }
+    if (form.admin_password.length < 8) {
+      toast('Пароль має містити щонайменше 8 символів', 'warning');
+      return;
+    }
+    if (form.admin_password !== form.admin_password_repeat) {
+      toast('Паролі не співпадають', 'warning');
+      return;
+    }
+    if (form.confirm.trim().toUpperCase() !== 'RESET') {
+      toast('Для скидання введіть RESET', 'warning');
+      return;
+    }
+    if (!window.confirm('Ви дійсно хочете повністю видалити всі дані та перезапустити систему з новим адміністратором?')) {
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const result: any = await api.resetSystemData({
+        confirm: form.confirm,
+        admin_login: form.admin_login.trim(),
+        admin_password: form.admin_password,
+        admin_full_name: form.admin_full_name.trim() || undefined,
+        create_backup: form.create_backup,
+      });
+      toast(
+        result?.backup?.filename
+          ? `Систему скинуто. Створено бекап ${result.backup.filename}`
+          : 'Систему скинуто',
+        'success',
+      );
+      sessionStorage.removeItem('token');
+      window.setTimeout(() => {
+        window.location.assign('/login');
+      }, 500);
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося виконати повний скидання', 'error');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-xl font-semibold mb-4 text-danger">Повний скидання системи</h2>
+      <div className="card space-y-4 border border-danger/40">
+        <div className="text-sm text-gray-300">
+          Видаляє всі дані в базі, створює чисту схему та заводить нового адміністратора.
+          Для безпечного завершення поточної сесії використайте новий логін, відмінний від поточного.
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Новий логін адміністратора</label>
+            <input
+              className="input-field"
+              value={form.admin_login}
+              onChange={(e) => setForm((prev) => ({ ...prev, admin_login: e.target.value }))}
+              placeholder="admin_reset"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ПІБ адміністратора</label>
+            <input
+              className="input-field"
+              value={form.admin_full_name}
+              onChange={(e) => setForm((prev) => ({ ...prev, admin_full_name: e.target.value }))}
+              placeholder="System Admin"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Новий пароль</label>
+            <input
+              type="password"
+              className="input-field"
+              value={form.admin_password}
+              onChange={(e) => setForm((prev) => ({ ...prev, admin_password: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Повторіть пароль</label>
+            <input
+              type="password"
+              className="input-field"
+              value={form.admin_password_repeat}
+              onChange={(e) => setForm((prev) => ({ ...prev, admin_password_repeat: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={form.create_backup}
+            onChange={(e) => setForm((prev) => ({ ...prev, create_backup: e.target.checked }))}
+          />
+          Створити резервну копію перед скиданням
+        </label>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Підтвердження</label>
+          <input
+            className="input-field md:max-w-xs"
+            value={form.confirm}
+            onChange={(e) => setForm((prev) => ({ ...prev, confirm: e.target.value }))}
+            placeholder="Введіть RESET"
+          />
+        </div>
+
+        <div className="text-xs text-gray-500">
+          Після успішного скидання поточна сесія завершиться, і потрібно буде увійти під новим адміністратором.
+        </div>
+
+        <div>
+          <button className="btn-danger" disabled={resetting} onClick={onReset}>
+            {resetting ? 'Скидання...' : 'Повністю скинути систему'}
+          </button>
+        </div>
       </div>
     </div>
   );
