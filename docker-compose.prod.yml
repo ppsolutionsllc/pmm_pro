@@ -1,42 +1,129 @@
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pmm}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+  CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS}
+  ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
+  SQL_ECHO: ${SQL_ECHO:-false}
+  DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+  DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+  DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-30}
+  DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-1800}
+  DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
+  FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?Set FRONTEND_BASE_URL}
+  PRINT_QR_TARGET_URL: ${PRINT_QR_TARGET_URL:-https://pmm.66br.pp.ua}
+  FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
+  FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+  FIRST_ADMIN_FULL_NAME: ${FIRST_ADMIN_FULL_NAME:-First Administrator}
+  ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
+  BACKUP_DIR: ${BACKUP_DIR:-/var/lib/pmm/backups}
+  BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-10}
+  POSTING_ERROR_LOG_PATH: ${POSTING_ERROR_LOG_PATH:-/var/log/pmm/posting_errors.log}
+  BACKEND_VERSION: ${BACKEND_VERSION:-prod}
+  FRONTEND_VERSION: ${FRONTEND_VERSION:-prod}
+  ENABLE_LEGACY_JSON_RESTORE: ${ENABLE_LEGACY_JSON_RESTORE:-false}
+  BACKEND_WORKERS: ${BACKEND_WORKERS:-3}
+  UPDATE_GITHUB_REPO: ${UPDATE_GITHUB_REPO:-}
+  UPDATE_GITHUB_TOKEN: ${UPDATE_GITHUB_TOKEN:-}
+  REQUIRE_SIGNED_TAGS: ${REQUIRE_SIGNED_TAGS:-false}
+  UPDATE_CHECK_CACHE_TTL_SECONDS: ${UPDATE_CHECK_CACHE_TTL_SECONDS:-300}
+  UPDATE_RELEASES_LIMIT: ${UPDATE_RELEASES_LIMIT:-10}
+  UPDATE_RELEASES_KEEP: ${UPDATE_RELEASES_KEEP:-5}
+  UPDATE_MIN_FREE_GB: ${UPDATE_MIN_FREE_GB:-2}
+  UPDATE_LOGS_DIR: ${UPDATE_LOGS_DIR:-/opt/pmm/logs}
+  UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/opt/pmm}
+  UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-/opt/pmm/current/docker-compose.prod.yml}
+  UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-/opt/pmm/.env.prod}
+  UPDATE_VERSION_ENV_KEY: ${UPDATE_VERSION_ENV_KEY:-APP_VERSION}
+  UPDATER_POLL_INTERVAL_SECONDS: ${UPDATER_POLL_INTERVAL_SECONDS:-5}
+  UPDATER_MODE: ${UPDATER_MODE:-false}
+
 services:
   db:
+    image: postgres:15
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pmm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-pmm}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pmm} -d ${POSTGRES_DB:-pmm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app
 
   backend:
     build:
+      context: ./backend
+      dockerfile: Dockerfile
       target: prod
     command: ["/app/scripts/start-backend-prod.sh"]
     restart: unless-stopped
-    environment:
-      BACKEND_WORKERS: ${BACKEND_WORKERS:-3}
-      UPDATE_GITHUB_REPO: ${UPDATE_GITHUB_REPO:-}
-      UPDATE_GITHUB_TOKEN: ${UPDATE_GITHUB_TOKEN:-}
-      REQUIRE_SIGNED_TAGS: ${REQUIRE_SIGNED_TAGS:-false}
-      UPDATE_CHECK_CACHE_TTL_SECONDS: ${UPDATE_CHECK_CACHE_TTL_SECONDS:-300}
-      UPDATE_RELEASES_LIMIT: ${UPDATE_RELEASES_LIMIT:-10}
-      UPDATE_RELEASES_KEEP: ${UPDATE_RELEASES_KEEP:-5}
-      UPDATE_MIN_FREE_GB: ${UPDATE_MIN_FREE_GB:-2}
-      UPDATE_LOGS_DIR: ${UPDATE_LOGS_DIR:-/opt/pmm/logs}
-      UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/opt/pmm}
-      UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-/opt/pmm/current/docker-compose.prod.yml}
-      UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-/opt/pmm/.env.prod}
-      UPDATE_VERSION_ENV_KEY: ${UPDATE_VERSION_ENV_KEY:-APP_VERSION}
-      UPDATER_POLL_INTERVAL_SECONDS: ${UPDATER_POLL_INTERVAL_SECONDS:-5}
-      UPDATER_MODE: ${UPDATER_MODE:-false}
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backend_artifacts:/var/lib/pmm/artifacts
+      - backend_backups:/var/lib/pmm/backups
+      - backend_logs:/var/log/pmm
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "/app/scripts/healthcheck-ready.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks:
+      - app
 
   migrate:
     build:
+      context: ./backend
+      dockerfile: Dockerfile
       target: prod
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["ops"]
+    networks:
+      - app
 
   frontend:
     build:
+      context: ./frontend
+      dockerfile: Dockerfile
       target: prod
     restart: unless-stopped
-    ports:
-      - "${PROD_FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 6
       start_period: 10s
+    networks:
+      - app
+
+networks:
+  app:
+
+volumes:
+  db_data:
+  backend_artifacts:
+  backend_backups:
+  backend_logs:

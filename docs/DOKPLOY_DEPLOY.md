@@ -1,7 +1,7 @@
 # Dokploy Deploy Guide (Docker Compose from GitHub)
 
-> This document assumes the current split model:
-> use `docker-compose.yml` + `docker-compose.prod.yml` with `.env.prod`.
+> This document assumes the Dokploy production model:
+> use only `docker-compose.prod.yml` with production environment variables.
 
 ## Purpose
 This repository is prepared for deployment in Dokploy using:
@@ -18,6 +18,8 @@ Routing is managed by Dokploy Domains UI. Manual Traefik labels in compose are i
 - Added source builds in prod compose:
   - `backend` builds from `./backend/Dockerfile` target `prod`
   - `frontend` builds from `./frontend/Dockerfile` target `prod`
+- `db` now uses a direct stable image: `postgres:15`
+- `docker-compose.prod.yml` is self-contained and does not depend on `docker-compose.yml`
 - Kept only internal ports with `expose`:
   - `frontend: 80`
   - `backend: 8000`
@@ -37,6 +39,10 @@ Set these in Dokploy project Environment/Secrets before deploy:
 
 - `POSTGRES_PASSWORD`
   - DB password for PostgreSQL and backend connection string.
+- `POSTGRES_USER`
+  - Example: `pmm`
+- `POSTGRES_DB`
+  - Example: `pmm`
 - `JWT_SECRET`
   - Required auth secret, **minimum 32 characters**.
 - `CORS_ORIGINS`
@@ -47,13 +53,9 @@ Set these in Dokploy project Environment/Secrets before deploy:
   - Example: `pmm.66br.pp.ua`
 
 ## Optional Environment Variables
-- `POSTGRES_USER` (default `pmm`)
-- `POSTGRES_DB` (default `pmm`)
 - `APP_VERSION` (default `dev`)
 - `BACKEND_WORKERS` (default `3`)
-- `RUN_MIGRATIONS` (default `true`)
 - `PRINT_QR_TARGET_URL` (default `https://pmm.66br.pp.ua`)
-- `HEALTHCHECK_HOST` (default `pmm.66br.pp.ua`)
 - `FIRST_ADMIN_LOGIN`, `FIRST_ADMIN_PASSWORD`, `FIRST_ADMIN_FULL_NAME` (bootstrap helper)
 - Update subsystem vars: `UPDATE_*`, `UPDATER_*` (only if you use updater feature)
 - Runtime storage vars: `ARTIFACTS_DIR`, `BACKUP_DIR`, `POSTING_ERROR_LOG_PATH` (app-level paths)
@@ -83,9 +85,18 @@ Run/check:
   - `frontend` healthy
 
 ## Migration Note (from Old Deployment Logic)
+`migrate` remains in compose as an `ops` profile service and does not start during normal Dokploy deploy.
+Run migrations as a separate step when needed:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile ops run --rm migrate
+```
+
 Removed from `docker-compose.prod.yml`:
-- Manual Traefik labels and `${DOMAIN}` interpolation.
-- Coolify-specific external network coupling.
+- dependency on `docker-compose.yml`
+- manual Traefik labels and `${DOMAIN}` interpolation
+- host `ports:` publishing for internal services
+- nested or fragile image interpolation logic
 
 Now configured in Dokploy instead of compose:
 - Domain binding

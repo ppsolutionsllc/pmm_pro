@@ -4,9 +4,9 @@
 
 ## Що тепер за що відповідає
 
-- `docker-compose.yml` — нейтральний base-шар: спільні сервіси, мережа, persistent volumes, базові env.
+- `docker-compose.yml` — base-шар для локальної розробки.
 - `docker-compose.dev.yml` — лише локальна розробка: bind mounts, hot reload, відкриті dev-порти, Vite dev server.
-- `docker-compose.prod.yml` — лише production: без bind mounts, без reload/debug, production startup, nginx зі зібраним frontend.
+- `docker-compose.prod.yml` — самодостатній production compose для Dokploy і звичайного `docker compose`: без bind mounts, без reload/debug, production startup, nginx зі зібраним frontend.
 - `.env.dev` — локальні безпечні dev-значення.
 - `.env.prod` — production template з placeholder-secret значеннями, які треба замінити перед deploy.
 - `.env.example` — загальна довідка по змінних.
@@ -34,7 +34,7 @@
 - frontend збирається заздалегідь і віддається nginx
 - backend стартує через `gunicorn`, без autoreload
 - dev-залежності не потрапляють у production image
-- назовні публікується тільки frontend port (`PROD_FRONTEND_PORT`, за замовчуванням `80`)
+- назовні публікується тільки `frontend` через platform ingress / Dokploy domain routing
 - міграції виконуються окремою командою `make prod-migrate`
 
 ## Persistent data
@@ -113,8 +113,8 @@ make prod-backup
 За умови, що не видалені named volumes, можна безпечно робити:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.prod.yml down
 ```
 
 ## Небезпечні команди
@@ -147,6 +147,7 @@ make prod-backup
 ## Production notes
 
 - Для production не використовуйте `docker-compose.dev.yml`
+- Для Dokploy використовуйте тільки `docker-compose.prod.yml`
 - Для локальної розробки не використовуйте `docker-compose.prod.yml`
 - Якщо змінюються Python або Node dependencies, потрібен rebuild image
 - `frontend_node_modules` — dev-only volume; його можна безпечно видаляти при проблемах з локальним frontend

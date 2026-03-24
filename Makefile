@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 
 DEV_COMPOSE := docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml
-PROD_COMPOSE := docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml
+PROD_COMPOSE := docker compose --env-file .env.prod -f docker-compose.prod.yml
 
 .PHONY: \
 	help \

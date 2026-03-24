@@ -2,7 +2,7 @@
 set -eu
 
 DEV_COMPOSE="docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml"
-PROD_COMPOSE="docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml"
+PROD_COMPOSE="docker compose --env-file .env.prod -f docker-compose.prod.yml"
 
 echo "[1/4] Python syntax check (backend/app)"
 python3 -m compileall backend/app >/dev/null
@@ -14,7 +14,7 @@ else
   sh -c "$DEV_COMPOSE run --rm --no-deps frontend npm run build >/dev/null"
 fi
 
-echo "[3/4] Compose validation (base+dev / base+prod)"
+echo "[3/4] Compose validation (base+dev / standalone prod)"
 sh -c "$DEV_COMPOSE config >/dev/null"
 sh -c "$PROD_COMPOSE config >/dev/null"
 
