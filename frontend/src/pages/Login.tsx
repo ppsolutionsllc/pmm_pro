@@ -123,18 +123,6 @@ const Login: React.FC = () => {
             {support?.label || 'Підтримка'}
           </button>
         </form>
-
-        <div className="mt-4 rounded-xl border border-mil-700/70 bg-glass px-4 py-3 text-center">
-          <div className="text-xs uppercase tracking-widest text-gray-500">Розробник</div>
-          <div className="mx-auto mt-2 w-full max-w-[208px] rounded-2xl border border-mil-700/70 bg-surface overflow-hidden shadow-soft">
-            <img
-              src="/black-axis-logo.png"
-              alt="BLACK AXIS LAB"
-              className="w-full h-auto object-contain rounded-2xl"
-              loading="lazy"
-            />
-          </div>
-        </div>
       </div>
     </div>
   );
