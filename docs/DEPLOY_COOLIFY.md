@@ -1,11 +1,14 @@
 # Deploy Guide: Coolify (Production)
 
+> This guide is kept for platform-specific click-path only.
+> The production source of truth is now `docker-compose.yml` + `docker-compose.prod.yml` with `.env.prod`.
+
 Цільовий production-домен: `pmm.66br.pp.ua`.
 
 ## 1) Source Of Truth
-- Compose file: `docker-compose.coolify.yml`
+- Compose files: `docker-compose.yml` + `docker-compose.prod.yml`
 - Branch: production/release branch з GitHub (рекомендовано `main`)
-- Env template: `.env.prod.example`
+- Env template: `.env.prod`
 - Публічний сервіс: `frontend`
 - Target port: `80`
 
@@ -37,7 +40,7 @@
 2. `Add New Resource` -> `Docker Compose`.
 3. Підключити GitHub repository.
 4. Вказати branch для production deploy.
-5. `Compose Path`: `docker-compose.coolify.yml`.
+5. `Compose Path`: `docker-compose.prod.yml`.
 6. Відкрити `Environment Variables` і заповнити обов'язкові змінні з розділу вище.
 7. Для ресурсу `frontend` увімкнути public access:
 8. `Domain` -> додати `pmm.66br.pp.ua`.

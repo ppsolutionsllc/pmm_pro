@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     first_admin_login: str = Field("", alias="FIRST_ADMIN_LOGIN")
     first_admin_password: str = Field("", alias="FIRST_ADMIN_PASSWORD")
     first_admin_full_name: str = Field("First Administrator", alias="FIRST_ADMIN_FULL_NAME")
-    artifacts_dir: str = Field("/tmp/pmm_artifacts", alias="ARTIFACTS_DIR")
-    backup_dir: str = Field("/tmp/pmm_backups", alias="BACKUP_DIR")
+    artifacts_dir: str = Field("/var/lib/pmm/artifacts", alias="ARTIFACTS_DIR")
+    backup_dir: str = Field("/var/lib/pmm/backups", alias="BACKUP_DIR")
     backup_retention_count: int = Field(10, alias="BACKUP_RETENTION_COUNT")
-    posting_error_log_path: str = Field("/tmp/pmm_posting_errors.log", alias="POSTING_ERROR_LOG_PATH")
+    posting_error_log_path: str = Field("/var/log/pmm/posting_errors.log", alias="POSTING_ERROR_LOG_PATH")
     frontend_base_url: str = Field("http://localhost:3000", alias="FRONTEND_BASE_URL")
     print_qr_target_url: str = Field("https://pmm.66br.pp.ua", alias="PRINT_QR_TARGET_URL")
     backend_version: str = Field("dev", alias="BACKEND_VERSION")
@@ -72,12 +72,12 @@ class Settings(BaseSettings):
         if any(marker in lowered for marker in placeholder_markers):
             raise ValueError(
                 "JWT_SECRET is not configured for production. Set a real secret in Coolify "
-                "Secrets/Environment Variables (32+ chars). Placeholder values are not allowed."
+                "or your deployment environment (32+ chars). Placeholder values are not allowed."
             )
         if len(candidate) < 32:
             raise ValueError(
-                "JWT_SECRET is too short. Set a real secret in Coolify "
-                "Secrets/Environment Variables (minimum 32 characters)."
+                "JWT_SECRET is too short. Set a real secret in your deployment environment "
+                "(minimum 32 characters)."
             )
         return candidate
 

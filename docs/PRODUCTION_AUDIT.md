@@ -4,11 +4,18 @@
 Репозиторій: `PMM_ONLINE`  
 Target deploy: Coolify + `pmm.66br.pp.ua`
 
+> Historical note: цей аудит описує стан до повного розділення `dev`/`prod`.
+> Поточний source of truth для deployment:
+> - базовий шар: `docker-compose.yml`
+> - production overlay: `docker-compose.prod.yml`
+> - production env: `.env.prod`
+> Актуальні команди та структура описані в `README.md`.
+
 ## 1) Summary
 Статус готовності: `READY WITH MANUAL ACTIONS`.
 
 Базовий production deploy через Coolify підготовлено:
-- `docker-compose.coolify.yml` є основним source of truth.
+- `docker-compose.yml` + `docker-compose.prod.yml` є основним source of truth.
 - назовні публікується тільки `frontend`.
 - `backend` і `db` лишаються внутрішніми сервісами.
 - health/readiness, міграції, env-шаблон та docs синхронізовані.
@@ -26,16 +33,16 @@ Target deploy: Coolify + `pmm.66br.pp.ua`
 ## High
 1. ALLOWED_HOSTS не був обов'язковим для Coolify stack.
    - Ризик: запуск без trusted host validation.
-   - Статус: fixed (`docker-compose.coolify.yml` -> required env).
+   - Статус: fixed (`docker-compose.prod.yml` -> required env).
 2. Доменні значення були не нормалізовані під production домен.
    - Ризик: конфігураційний дрейф між кодом/env/docs.
-   - Статус: fixed (`.env.prod.example`, docs, checks).
+   - Статус: fixed (`.env.prod`, docs, checks).
 3. Потенційна проблема прав доступу до persistent runtime директорій.
    - Ризик: неможливість писати артефакти/бекупи/логи у проді.
-   - Статус: fixed (`backend/Dockerfile`, `start-backend.sh` preflight checks).
+   - Статус: fixed (`backend/Dockerfile`, `start-backend-prod.sh` preflight checks).
 4. Backend healthcheck був несумісний з strict `ALLOWED_HOSTS`.
    - Ризик: backend позначався unhealthy (`400` на `/ready`) при правильному production host whitelist.
-   - Статус: fixed (healthcheck надсилає коректний `Host` header).
+   - Статус: fixed (healthcheck переведено на локальний `/readyz` без залежності від зовнішнього `Host` header).
 
 ## Medium
 1. Легасі `docker-compose.prod.yml` суперечив secure defaults.
@@ -44,34 +51,32 @@ Target deploy: Coolify + `pmm.66br.pp.ua`
 2. Smoke/check scripts не перевіряли нові required env для compose.
    - Ризик: false-positive перевірки.
    - Статус: fixed (`Makefile`, `scripts/smoke-checks.sh`).
-3. Колізія локальних image names між `docker-compose.yml` та `docker-compose.coolify.yml`.
+3. Колізія локальних image names між різними compose-режимами.
    - Ризик: dev frontend image (Vite) міг підхоплюватись у coolify-стеку під час локальної валідації.
-   - Статус: fixed (розділено image names для dev/coolify stack).
+   - Статус: fixed (dev/prod збираються через окремі targets та overlays).
 
 ## Low
-1. Наявність legacy deploy path (`docker-compose.prod.yml`) може вводити в оману.
-   - Ризик: оператор може обрати не той файл.
-   - Статус: mitigated (docs вказують єдиний цільовий файл для Coolify).
+1. Історичні документи можуть описувати застарілий deployment path.
+   - Ризик: оператор може обрати не ту схему запуску.
+   - Статус: mitigated (README та deployment docs вказують актуальну модель `base + prod overlay`).
 
 ## 3) Fixes Applied
-- Hardened `docker-compose.coolify.yml`:
-  - `ALLOWED_HOSTS` зроблено required.
-  - додано `PRINT_QR_TARGET_URL` з production default.
-  - `frontend` переведено на `expose: 80` (без host port bind у compose).
-  - додано унікальні image names для уникнення конфліктів з dev-стеком.
-  - backend healthcheck переведено на перевірку з коректним `Host` header.
-- Hardened `docker-compose.prod.yml` (legacy path):
-  - прибрано insecure fallback-и для `CORS_ORIGINS`, `ALLOWED_HOSTS`, `FRONTEND_BASE_URL`, `DOMAIN`.
-  - healthchecks узгоджено з `/ready` і `/health`.
-- Updated `docker-compose.yml` (dev path):
-  - додано окремі image names для backend/frontend/migrator, щоб dev і coolify не перезаписували одне одного.
+- Hardened `docker-compose.yml` + `docker-compose.prod.yml`:
+  - production overlay повністю відокремлено від dev-поведінки.
+  - `ALLOWED_HOSTS`, `CORS_ORIGINS`, `FRONTEND_BASE_URL`, `DOMAIN` винесено в production env.
+  - bind mounts прибрано з production.
+  - дані винесено в persistent named volumes.
+  - healthchecks узгоджено з `/readyz` і `/health`.
+- Added `docker-compose.dev.yml`:
+  - bind mounts, autoreload, dev ports і dev workflow живуть тільки тут.
+  - frontend працює через Vite dev server, backend через reload startup.
 - Hardened backend startup/runtime:
-  - preflight writable checks для artifacts/backups/log dir (`start-backend.sh`).
+  - preflight writable checks для artifacts/backups/log dir (`start-backend-prod.sh`).
   - graceful degradation при недоступному file logging (`app/main.py`).
   - secure defaults для `ALLOWED_HOSTS` parsing (`app/config.py`).
   - runtime dir ownership у Docker image (`backend/Dockerfile`).
 - Normalized production env and docs:
-  - `.env.prod.example` орієнтовано на `pmm.66br.pp.ua`.
+  - `.env.prod` орієнтовано на production overlay і documented як deployment template.
   - детальний Coolify deployment guide оновлено.
   - smoke/config checks синхронізовано з required vars.
 

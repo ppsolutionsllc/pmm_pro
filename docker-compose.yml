@@ -1,82 +1,100 @@
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pmm}:${POSTGRES_PASSWORD:-pmm}@db:5432/${POSTGRES_DB:-pmm}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the selected env file}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
+  ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
+  SQL_ECHO: ${SQL_ECHO:-false}
+  DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+  DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+  DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-30}
+  DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-1800}
+  DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
+  FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+  PRINT_QR_TARGET_URL: ${PRINT_QR_TARGET_URL:-http://localhost:3000}
+  FIRST_ADMIN_LOGIN: ${FIRST_ADMIN_LOGIN:-}
+  FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-}
+  FIRST_ADMIN_FULL_NAME: ${FIRST_ADMIN_FULL_NAME:-First Administrator}
+  ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}
+  BACKUP_DIR: ${BACKUP_DIR:-/var/lib/pmm/backups}
+  BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-10}
+  POSTING_ERROR_LOG_PATH: ${POSTING_ERROR_LOG_PATH:-/var/log/pmm/posting_errors.log}
+  BACKEND_VERSION: ${BACKEND_VERSION:-dev}
+  FRONTEND_VERSION: ${FRONTEND_VERSION:-dev}
+  ENABLE_LEGACY_JSON_RESTORE: ${ENABLE_LEGACY_JSON_RESTORE:-false}
+
 services:
   db:
     image: postgres:15
-    restart: always
     environment:
-      POSTGRES_USER: pmm
-      POSTGRES_PASSWORD: pmm
-      POSTGRES_DB: pmm
+      POSTGRES_USER: ${POSTGRES_USER:-pmm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pmm}
+      POSTGRES_DB: ${POSTGRES_DB:-pmm}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pmm} -d ${POSTGRES_DB:-pmm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app
 
   backend:
-    image: ${PMM_DEV_BACKEND_IMAGE:-pmm-online-backend-dev:local}
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    user: "0:0"
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      - ./backend:/app
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
-      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
-      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
-      - SQL_ECHO=${SQL_ECHO:-false}
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
-      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-20}
-      - DB_POOL_TIMEOUT_SECONDS=${DB_POOL_TIMEOUT_SECONDS:-30}
-      - DB_POOL_RECYCLE_SECONDS=${DB_POOL_RECYCLE_SECONDS:-1800}
-      - DB_CONNECT_TIMEOUT_SECONDS=${DB_CONNECT_TIMEOUT_SECONDS:-10}
-      - FIRST_ADMIN_LOGIN=${FIRST_ADMIN_LOGIN:-}
-      - FIRST_ADMIN_PASSWORD=${FIRST_ADMIN_PASSWORD:-}
-      - FIRST_ADMIN_FULL_NAME=${FIRST_ADMIN_FULL_NAME:-First Administrator}
-    depends_on:
-      - db
+      - backend_artifacts:/var/lib/pmm/artifacts
+      - backend_backups:/var/lib/pmm/backups
+      - backend_logs:/var/log/pmm
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "/app/scripts/healthcheck-ready.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks:
+      - app
 
-  migrator:
-    image: ${PMM_DEV_BACKEND_IMAGE:-pmm-online-backend-dev:local}
+  migrate:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: sh -c "alembic upgrade head"
-    user: "0:0"
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://pmm:pmm@db:5432/pmm}
-      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
-      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
-      - SQL_ECHO=${SQL_ECHO:-false}
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
-      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-20}
-      - DB_POOL_TIMEOUT_SECONDS=${DB_POOL_TIMEOUT_SECONDS:-30}
-      - DB_POOL_RECYCLE_SECONDS=${DB_POOL_RECYCLE_SECONDS:-1800}
-      - DB_CONNECT_TIMEOUT_SECONDS=${DB_CONNECT_TIMEOUT_SECONDS:-10}
+    environment: *backend-env
+    command: ["alembic", "upgrade", "head"]
     depends_on:
-      - db
-    restart: "no"
+      db:
+        condition: service_healthy
+    profiles: ["ops"]
+    networks:
+      - app
 
   frontend:
-    image: ${PMM_DEV_FRONTEND_IMAGE:-pmm-online-frontend-dev:local}
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    # keep source mounted for live edit but reinstall dependencies each start
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm install && npm run dev"
-    ports:
-      - "3000:3000"
-    environment:
-      - VITE_DEV_PROXY_TARGET=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app
+
+networks:
+  app:
 
 volumes:
-  pgdata:
-    name: pmm_online_2mvp_db_data
+  db_data:
+  backend_artifacts:
+  backend_backups:
+  backend_logs:
+  frontend_node_modules:

@@ -1,0 +1,50 @@
+services:
+  db:
+    restart: unless-stopped
+    ports:
+      - "${DEV_DB_PORT:-5432}:5432"
+
+  backend:
+    build:
+      target: dev
+    command: ["/app/scripts/start-backend-dev.sh"]
+    user: "0:0"
+    restart: unless-stopped
+    ports:
+      - "${DEV_BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini:ro
+      - ./backend/scripts:/app/scripts
+      - ./backend/tests:/app/tests
+
+  migrate:
+    build:
+      target: dev
+    user: "0:0"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini:ro
+      - ./backend/scripts:/app/scripts
+      - ./backend/tests:/app/tests
+
+  frontend:
+    build:
+      target: dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+    restart: unless-stopped
+    environment:
+      VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://backend:8000}
+    ports:
+      - "${DEV_FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s

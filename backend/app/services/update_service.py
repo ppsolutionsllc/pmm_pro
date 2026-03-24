@@ -445,13 +445,19 @@ def _run_cmd(
     }
 
 
-def _compose_command_base(*, compose_file: Path, env_file: Path) -> list[str]:
+def _compose_command_base(*, compose_files: list[Path], env_file: Path) -> list[str]:
     if shutil.which("docker"):
         probe = subprocess.run(["docker", "compose", "version"], capture_output=True, text=True, check=False)
         if probe.returncode == 0:
-            return ["docker", "compose", "--env-file", str(env_file), "-f", str(compose_file)]
+            cmd = ["docker", "compose", "--env-file", str(env_file)]
+            for compose_file in compose_files:
+                cmd.extend(["-f", str(compose_file)])
+            return cmd
     if shutil.which("docker-compose"):
-        return ["docker-compose", "--env-file", str(env_file), "-f", str(compose_file)]
+        cmd = ["docker-compose", "--env-file", str(env_file)]
+        for compose_file in compose_files:
+            cmd.extend(["-f", str(compose_file)])
+        return cmd
     raise UpdateError("Neither 'docker compose' nor 'docker-compose' is available")
 
 
@@ -509,15 +515,25 @@ def _current_link(root: Path) -> Path:
     return (root / "current").resolve(strict=False)
 
 
-def _compose_file_for_release(release_dir: Path) -> Path:
-    return (release_dir / "docker-compose.prod.yml").resolve()
+def _compose_files_from_overlay(overlay_file: Path) -> list[Path]:
+    overlay = overlay_file.resolve()
+    base = (overlay.parent / "docker-compose.yml").resolve()
+    files: list[Path] = []
+    if base.exists() and base != overlay:
+        files.append(base)
+    files.append(overlay)
+    return files
 
 
-def _compose_file_current(root: Path) -> Path:
+def _compose_files_for_release(release_dir: Path) -> list[Path]:
+    return _compose_files_from_overlay(release_dir / "docker-compose.prod.yml")
+
+
+def _compose_files_current(root: Path) -> list[Path]:
     configured = str(settings.update_compose_file or "").strip()
     if configured:
-        return Path(configured).expanduser().resolve()
-    return (root / "current" / "docker-compose.prod.yml").resolve()
+        return _compose_files_from_overlay(Path(configured).expanduser().resolve())
+    return _compose_files_from_overlay(root / "current" / "docker-compose.prod.yml")
 
 
 def _env_file_path() -> Path:
@@ -551,14 +567,15 @@ async def _run_precheck(db: AsyncSession, *, root: Path, repo: str) -> dict[str,
         raise UpdateError("Precheck failed: pg_dump/pg_restore are required")
 
     # docker compose availability
-    _compose_command_base(compose_file=_compose_file_current(root), env_file=_env_file_path())
+    _compose_command_base(compose_files=_compose_files_current(root), env_file=_env_file_path())
 
     if not root.exists() or not root.is_dir():
         raise UpdateError(f"Precheck failed: update root directory does not exist: {root}")
 
-    compose_current = _compose_file_current(root)
-    if not compose_current.exists():
-        raise UpdateError(f"Precheck failed: compose file not found: {compose_current}")
+    compose_current = _compose_files_current(root)
+    for compose_file in compose_current:
+        if not compose_file.exists():
+            raise UpdateError(f"Precheck failed: compose file not found: {compose_file}")
 
     env_file = _env_file_path()
     if not env_file.exists():
@@ -577,7 +594,7 @@ async def _run_precheck(db: AsyncSession, *, root: Path, repo: str) -> dict[str,
 
     return {
         "repo": repo,
-        "compose_file": str(compose_current),
+        "compose_file": ",".join(str(item) for item in compose_current),
         "env_file": str(env_file),
         "disk_free_gb": round(free_gb, 2),
         "versions": versions_payload.get("available_versions") or [],
@@ -635,9 +652,21 @@ def _build_local_images(*, release_dir: Path, version: str) -> dict[str, Any]:
     backend_dir = (release_dir / "backend").resolve()
     frontend_dir = (release_dir / "frontend").resolve()
 
-    _run_cmd(["docker", "build", "-t", backend_image, "-f", str(backend_dir / "Dockerfile"), str(backend_dir)], cwd=str(release_dir), timeout=3600)
-    _run_cmd(["docker", "build", "-t", frontend_image, "-f", str(frontend_dir / "Dockerfile.prod"), str(frontend_dir)], cwd=str(release_dir), timeout=3600)
-    _run_cmd(["docker", "build", "-t", worker_image, "-f", str(backend_dir / "Dockerfile"), str(backend_dir)], cwd=str(release_dir), timeout=3600)
+    _run_cmd(
+        ["docker", "build", "--target", "prod", "-t", backend_image, "-f", str(backend_dir / "Dockerfile"), str(backend_dir)],
+        cwd=str(release_dir),
+        timeout=3600,
+    )
+    _run_cmd(
+        ["docker", "build", "--target", "prod", "-t", frontend_image, "-f", str(frontend_dir / "Dockerfile"), str(frontend_dir)],
+        cwd=str(release_dir),
+        timeout=3600,
+    )
+    _run_cmd(
+        ["docker", "build", "--target", "prod", "-t", worker_image, "-f", str(backend_dir / "Dockerfile"), str(backend_dir)],
+        cwd=str(release_dir),
+        timeout=3600,
+    )
 
     return {
         "backend": backend_image,
@@ -656,11 +685,12 @@ def _env_updates_for_version(version: str, images: dict[str, str]) -> dict[str, 
 
 
 def _run_migrations(*, release_dir: Path, env_file: Path, env_updates: dict[str, str]) -> dict[str, Any]:
-    compose_file = _compose_file_for_release(release_dir)
-    if not compose_file.exists():
-        raise UpdateError(f"Compose file not found in release: {compose_file}")
+    compose_files = _compose_files_for_release(release_dir)
+    for compose_file in compose_files:
+        if not compose_file.exists():
+            raise UpdateError(f"Compose file not found in release: {compose_file}")
 
-    compose_base = _compose_command_base(compose_file=compose_file, env_file=env_file)
+    compose_base = _compose_command_base(compose_files=compose_files, env_file=env_file)
     runtime_env = os.environ.copy()
     runtime_env.update(env_updates)
 
@@ -693,14 +723,14 @@ def _switch_current_symlink(*, root: Path, target_release_dir: Path) -> str | No
 
 
 def _deploy_services(*, root: Path, env_file: Path) -> dict[str, Any]:
-    compose_file = _compose_file_current(root)
-    compose_base = _compose_command_base(compose_file=compose_file, env_file=env_file)
+    compose_files = _compose_files_current(root)
+    compose_base = _compose_command_base(compose_files=compose_files, env_file=env_file)
     return _run_cmd(compose_base + ["up", "-d", "backend", "frontend"], cwd=str(root), timeout=1800)
 
 
 def _healthcheck_backend_ready(*, root: Path, env_file: Path) -> dict[str, Any]:
-    compose_file = _compose_file_current(root)
-    compose_base = _compose_command_base(compose_file=compose_file, env_file=env_file)
+    compose_files = _compose_files_current(root)
+    compose_base = _compose_command_base(compose_files=compose_files, env_file=env_file)
     return _run_cmd(
         compose_base
         + [
@@ -1143,7 +1173,7 @@ async def run_system_update_job(
                     "db_schema_before": schema_before,
                     "db_schema_after": db_schema_after,
                     "job_id": job_id,
-                    "compose_file": str(_compose_file_current(root)),
+                    "compose_file": ",".join(str(item) for item in _compose_files_current(root)),
                     "env_file": str(env_file),
                     "release_dir": str(release_dir),
                     "previous_release_dir": previous_release_dir,

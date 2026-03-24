@@ -1,5 +1,10 @@
 # GITHUB_PREP_REPORT
 
+> Historical note: цей файл описує попередній етап підготовки репозиторію.
+> Після повної dev/prod-реорганізації актуальна схема запуску описана в `README.md`,
+> а основні env/compose файли тепер: `.env.dev`, `.env.prod`, `docker-compose.yml`,
+> `docker-compose.dev.yml`, `docker-compose.prod.yml`.
+
 ## 1) Что было удалено перед публикацией
 - Удалены временные и итерационные документы из корня:
 - `CHANGELOG_REFACTOR.md`
@@ -26,8 +31,8 @@
 
 ## 3) Что добавлено для GitHub-ready состояния
 - Добавлены env-шаблоны:
-- `.env.backend.example`
-- `.env.frontend.example`
+- `.env.dev`
+- `.env.prod`
 - Добавлен CLI-инструмент первичной инициализации администратора:
 - `backend/app/cli.py`
 - Добавлен backend docker ignore:
@@ -36,6 +41,7 @@
 - `README.md` (полный practical quickstart)
 - `.gitignore`
 - `docker-compose.yml`
+- `docker-compose.dev.yml`
 - `docker-compose.prod.yml`
 - `backend/app/config.py`
 - `backend/app/main.py`
@@ -43,10 +49,9 @@
 - `backend/alembic.ini`
 
 ## 4) Какие `.env.example` созданы
-- `.env.example` — локальный docker-compose.
-- `.env.prod.example` — production compose.
-- `.env.backend.example` — standalone backend.
-- `.env.frontend.example` — standalone frontend.
+- `.env.example` — шаблон с описанием обеих схем.
+- `.env.dev` — локальная docker-compose разработка.
+- `.env.prod` — production docker-compose deployment.
 
 ## 5) Что обновлено в README
 - Добавлены обязательные разделы:
@@ -74,8 +79,8 @@
 - `backend/app/main.py` — удалено автосоздание admin в lifespan.
 - `backend/app/config.py` — добавлены `FIRST_ADMIN_*`, убраны `ADMIN_*` runtime-зависимости.
 - `backend/app/cli.py` — добавлен безопасный bootstrap-командный интерфейс.
-- `docker-compose.yml` и `docker-compose.prod.yml` — удалены обязательные `ADMIN_*`, добавлены optional `FIRST_ADMIN_*`.
-- `.env.example` и `.env.prod.example` — обновлены шаблоны под новый first-run сценарий.
+- `docker-compose.yml`, `docker-compose.dev.yml` и `docker-compose.prod.yml` — разделены dev/prod режимы и удалены обязательные `ADMIN_*`.
+- `.env.example`, `.env.dev` и `.env.prod` — синхронизированы с новым first-run и deployment сценарием.
 - `README.md` — задокументирован пошаговый first-run.
 
 ## 9) Какие спорные места остались

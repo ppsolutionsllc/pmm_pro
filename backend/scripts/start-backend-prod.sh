@@ -5,16 +5,17 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR:-/var/lib/pmm/artifacts}"
 BACKUP_DIR="${BACKUP_DIR:-/var/lib/pmm/backups}"
 POSTING_ERROR_LOG_PATH="${POSTING_ERROR_LOG_PATH:-/var/log/pmm/posting_errors.log}"
 LOG_DIR="$(dirname "${POSTING_ERROR_LOG_PATH}")"
+BACKEND_WORKERS="${BACKEND_WORKERS:-3}"
 
 ensure_writable_dir() {
   dir_path="$1"
   mkdir -p "${dir_path}" || true
   if [ ! -d "${dir_path}" ]; then
-    echo "[entrypoint] directory does not exist: ${dir_path}" >&2
+    echo "[prod-entrypoint] directory does not exist: ${dir_path}" >&2
     exit 1
   fi
   if [ ! -w "${dir_path}" ]; then
-    echo "[entrypoint] directory is not writable by current user: ${dir_path}" >&2
+    echo "[prod-entrypoint] directory is not writable by current user: ${dir_path}" >&2
     exit 1
   fi
 }
@@ -22,13 +23,6 @@ ensure_writable_dir() {
 ensure_writable_dir "${ARTIFACTS_DIR}"
 ensure_writable_dir "${BACKUP_DIR}"
 ensure_writable_dir "${LOG_DIR}"
-
-if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
-  echo "[entrypoint] applying database migrations"
-  alembic upgrade head
-fi
-
-BACKEND_WORKERS="${BACKEND_WORKERS:-3}"
 
 exec gunicorn app.main:app \
   -k uvicorn.workers.UvicornWorker \

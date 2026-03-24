@@ -1,111 +1,187 @@
-# PMM Online MVP
+# PMM Online
 
-Веб-система обліку ПММ: заявки підрозділів, склад, видача оператором, проведення, інциденти, резервні копії, звітність.
+Система обліку ПММ на `FastAPI + PostgreSQL + React/Vite`, повністю розділена на `dev` і `prod` режими без змішування runtime-логіки.
 
-## Стек
-- `frontend`: React 19 + Vite 7 + TypeScript + Tailwind CSS.
-- `backend`: FastAPI + SQLAlchemy 2 + Alembic.
-- `database`: PostgreSQL 15.
-- `containers`: Docker Compose.
+## Що тепер за що відповідає
 
-## Структура
-- `frontend/` — клієнт.
-- `backend/app/` — API та бізнес-логіка.
-- `backend/alembic/` — міграції.
-- `docker-compose.yml` — локальна dev-конфігурація.
-- `docker-compose.prod.yml` — production стек для Dokploy / Docker Compose deploy з GitHub.
-- `docker-compose.coolify.yml` — production стек для Coolify.
-- `docs/` — документація.
+- `docker-compose.yml` — нейтральний base-шар: спільні сервіси, мережа, persistent volumes, базові env.
+- `docker-compose.dev.yml` — лише локальна розробка: bind mounts, hot reload, відкриті dev-порти, Vite dev server.
+- `docker-compose.prod.yml` — лише production: без bind mounts, без reload/debug, production startup, nginx зі зібраним frontend.
+- `.env.dev` — локальні безпечні dev-значення.
+- `.env.prod` — production template з placeholder-secret значеннями, які треба замінити перед deploy.
+- `.env.example` — загальна довідка по змінних.
+- `backend/Dockerfile` — multi-stage backend image з окремими `dev` і `prod` стадіями.
+- `frontend/Dockerfile` — multi-stage frontend image з окремими `dev` і `prod` стадіями.
+- `frontend/nginx.prod.conf` — nginx тільки для production frontend.
+- `backend/scripts/start-backend-dev.sh` — dev startup з Alembic + `uvicorn --reload`.
+- `backend/scripts/start-backend-prod.sh` — production startup через `gunicorn`.
 
-## Вимоги
-- Docker + Docker Compose.
-- Для локального запуску без Docker:
-  - Python `3.12+`
-  - Node.js `20+`
+## Чим dev відрізняється від prod
 
-## Локальний запуск (Docker, dev)
-1. Підготувати env:
+### Dev
+- bind mounts для `backend/app`, `backend/alembic`, `frontend/`
+- `uvicorn --reload` тільки в dev
+- `vite` dev server тільки в dev
+- порти відкриті назовні:
+  - frontend: `3000`
+  - backend: `8000`
+  - postgres: `5432`
+- backend автоматично застосовує міграції при старті
+- dev-залежності встановлюються тільки в dev image stage
+
+### Prod
+- жодних bind mounts для коду
+- frontend збирається заздалегідь і віддається nginx
+- backend стартує через `gunicorn`, без autoreload
+- dev-залежності не потрапляють у production image
+- назовні публікується тільки frontend port (`PROD_FRONTEND_PORT`, за замовчуванням `80`)
+- міграції виконуються окремою командою `make prod-migrate`
+
+## Persistent data
+
+Дані не зберігаються всередині контейнерів. Використовуються named volumes:
+
+- `db_data` — база PostgreSQL
+- `backend_artifacts` — згенеровані артефакти / друк / файли застосунку
+- `backend_backups` — `pg_dump` backups
+- `backend_logs` — runtime logs backend
+- `frontend_node_modules` — лише dev-залежності frontend у локальній розробці
+
+Шляхи всередині backend контейнера стандартизовані:
+
+- `ARTIFACTS_DIR=/var/lib/pmm/artifacts`
+- `BACKUP_DIR=/var/lib/pmm/backups`
+- `POSTING_ERROR_LOG_PATH=/var/log/pmm/posting_errors.log`
+
+## Запуск dev
+
 ```bash
-cp .env.example .env
-# заповнити JWT_SECRET (мінімум 32 символи)
+make dev-up
 ```
-2. Застосувати міграції:
+
+Корисні команди:
+
 ```bash
-docker compose run --rm migrator
-```
-3. Створити першого адміністратора (одноразово):
-```bash
-docker compose run --rm \
-  -e FIRST_ADMIN_LOGIN=admin \
-  -e FIRST_ADMIN_PASSWORD='ChangeMe_Strong_123' \
-  -e FIRST_ADMIN_FULL_NAME='System Admin' \
-  backend python -m app.cli create-first-admin
-```
-4. Запустити стек:
-```bash
-docker compose up --build
+make dev-build
+make dev-migrate
+make dev-admin
+make dev-logs
+make dev-down
+make dev-rebuild
 ```
 
 Доступ:
+
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:8000`
 - OpenAPI: `http://localhost:8000/docs`
+- PostgreSQL: `localhost:5432`
 
-## Production / Dokploy
-Для Dokploy (Docker Compose service) використовуйте `docker-compose.prod.yml`.
-Роутинг домену налаштовується через Dokploy UI (`Domains`), а не через Traefik labels у compose.
+## Запуск prod
 
-Швидкий старт:
-1. В Dokploy оберіть repository + branch.
-2. Вкажіть compose path: `docker-compose.prod.yml`.
-3. Додайте required env змінні (мінімум: `POSTGRES_PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`, `FRONTEND_BASE_URL`, `ALLOWED_HOSTS`).
-4. У `Domains` прив'яжіть домен до сервісу `frontend` на container port `80`.
+1. Відредагуйте `.env.prod` і задайте реальні secrets та домен.
+2. Запустіть стек:
 
-Детально: [DOKPLOY_DEPLOY.md](docs/DOKPLOY_DEPLOY.md)
-
-## Production / Coolify
-Для Coolify використовуйте `docker-compose.coolify.yml`.
-Цільовий домен: `https://pmm.66br.pp.ua`.
-
-Ключові production env:
-- `CORS_ORIGINS=https://pmm.66br.pp.ua`
-- `FRONTEND_BASE_URL=https://pmm.66br.pp.ua`
-- `ALLOWED_HOSTS=pmm.66br.pp.ua`
-- `POSTGRES_PASSWORD` (secret)
-- `JWT_SECRET` (secret, 32+ chars)
-
-Критично для deploy:
-- `JWT_SECRET` задається вручну в Coolify (`Secrets`/`Environment Variables`).
-- Placeholder-значення не підходять і спеціально відхиляються backend-валидацією.
-- Якщо `JWT_SECRET` не заданий коректно (або < 32 символів), backend не стартує.
-
-Швидкі посилання:
-- [DEPLOY_COOLIFY.md](docs/DEPLOY_COOLIFY.md)
-- [RUNBOOK.md](docs/RUNBOOK.md)
-- [PRODUCTION_AUDIT.md](docs/PRODUCTION_AUDIT.md)
-
-## Основні health endpoints
-- `GET /health` — liveness.
-- `GET /ready` — readiness (перевірка БД).
-- Сумісність з legacy:
-  - `GET /healthz`
-  - `GET /readyz`
-
-## Перевірки
-- Повний smoke-check:
 ```bash
-./scripts/smoke-checks.sh
-```
-- Або через `make`:
-```bash
-make check
+make prod-up
 ```
 
-## Безпека та конфігурація
-- CORS і frontend origin керуються через env (`CORS_ORIGINS`, `FRONTEND_BASE_URL`).
-- Дозволені host-и: `ALLOWED_HOSTS` (у проді не залишати `*`).
-- Security headers на API вмикаються `ENABLE_SECURITY_HEADERS=true`.
-- Secrets у репозиторій не зберігаються.
+3. Застосуйте міграції:
 
-## Статус
-MVP, активна розробка. Поточний production hardening та деплой-процедури описані в `docs/`.
+```bash
+make prod-migrate
+```
+
+Корисні команди:
+
+```bash
+make prod-build
+make prod-logs
+make prod-down
+make prod-rebuild
+make prod-backup
+```
+
+## Safe recreate / що можна пересоздавати
+
+Без втрати даних можна пересоздавати:
+
+- `backend`
+- `frontend`
+- `migrate`
+
+За умови, що не видалені named volumes, можна безпечно робити:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+## Небезпечні команди
+
+Небезпечно:
+
+```bash
+docker compose down -v
+docker volume rm ...
+```
+
+Це видаляє persistent volumes і може призвести до втрати:
+
+- БД
+- backup-файлів
+- runtime artifacts
+- логів
+
+## Backup / restore
+
+- Backup створюється в `backend_backups`
+- Для ручного production backup:
+
+```bash
+make prod-backup
+```
+
+- Backup volume треба включати в стратегію зовнішнього резервного копіювання хоста
+
+## Production notes
+
+- Для production не використовуйте `docker-compose.dev.yml`
+- Для локальної розробки не використовуйте `docker-compose.prod.yml`
+- Якщо змінюються Python або Node dependencies, потрібен rebuild image
+- `frontend_node_modules` — dev-only volume; його можна безпечно видаляти при проблемах з локальним frontend
+- update subsystem у production залишився окремою production-функцією і не тягнеться в dev workflow
+
+## Мінімальний operational workflow
+
+### Dev
+
+```bash
+make dev-up
+make dev-logs
+make dev-down
+```
+
+### Prod
+
+```bash
+make prod-up
+make prod-migrate
+make prod-logs
+```
+
+### Safe update
+
+```bash
+make prod-build
+make prod-migrate
+make prod-rebuild
+```
+
+## Hardening next steps
+
+- винести production ingress/TLS у зовнішній reverse proxy або platform ingress
+- додати зовнішній offsite backup для `db_data` і `backend_backups`
+- налаштувати централізований log shipping
+- додати image scanning і CI-перевірку compose/build
+- перевірити production resource limits (`deploy.resources` або platform-level limits)

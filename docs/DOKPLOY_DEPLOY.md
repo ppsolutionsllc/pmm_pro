@@ -1,5 +1,8 @@
 # Dokploy Deploy Guide (Docker Compose from GitHub)
 
+> This document assumes the current split model:
+> use `docker-compose.yml` + `docker-compose.prod.yml` with `.env.prod`.
+
 ## Purpose
 This repository is prepared for deployment in Dokploy using:
 - Service type: `Docker Compose`
@@ -13,15 +16,15 @@ Routing is managed by Dokploy Domains UI. Manual Traefik labels in compose are i
 - Removed hard dependency on `${DOMAIN}` in compose routing labels.
 - Removed Coolify-specific external network dependency from prod compose.
 - Added source builds in prod compose:
-  - `backend` builds from `./backend/Dockerfile`
-  - `frontend` builds from `./frontend/Dockerfile.prod`
+  - `backend` builds from `./backend/Dockerfile` target `prod`
+  - `frontend` builds from `./frontend/Dockerfile` target `prod`
 - Kept only internal ports with `expose`:
   - `frontend: 80`
   - `backend: 8000`
 - Preserved named volumes for persistent data:
   - `pgdata`, `pmm_artifacts`, `pmm_backups`, `pmm_logs`
 - Kept healthchecks for db/backend/frontend.
-- Backend startup in prod now uses `/app/scripts/start-backend.sh` (includes migration run when `RUN_MIGRATIONS=true`).
+- Backend startup in prod now uses `/app/scripts/start-backend-prod.sh`.
 
 ## Which Service Gets the Domain in Dokploy
 - Public service: `frontend`
