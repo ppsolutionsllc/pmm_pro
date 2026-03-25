@@ -40,13 +40,15 @@
 
 ## Persistent data
 
-Дані не зберігаються всередині контейнерів. Використовуються named volumes:
+У production всі persistent дані лежать в одній хостовій папці `PMM_DATA_ROOT`
+(за замовчуванням `/opt/pmm-data`):
 
-- `db_data` — база PostgreSQL
-- `backend_artifacts` — згенеровані артефакти / друк / файли застосунку
-- `backend_backups` — `pg_dump` backups
-- `backend_logs` — runtime logs backend
-- `frontend_node_modules` — лише dev-залежності frontend у локальній розробці
+- `${PMM_DATA_ROOT}/postgres` — база PostgreSQL
+- `${PMM_DATA_ROOT}/artifacts` — згенеровані артефакти / друк / файли застосунку
+- `${PMM_DATA_ROOT}/backups` — `pg_dump` backups
+- `${PMM_DATA_ROOT}/logs` — runtime logs backend
+
+Для локальної dev-розробки окремо лишається `frontend_node_modules` volume.
 
 Шляхи всередині backend контейнера стандартизовані:
 
@@ -80,14 +82,20 @@ make dev-rebuild
 
 ## Запуск prod
 
-1. Відредагуйте `.env.prod` і задайте реальні secrets та домен.
-2. Запустіть стек:
+1. Відредагуйте `.env.prod` і задайте реальні secrets, домен і `PMM_DATA_ROOT`.
+2. Підготуйте хостову папку для даних:
+
+```bash
+sudo ./scripts/prepare-prod-data-root.sh /opt/pmm-data
+```
+
+3. Запустіть стек:
 
 ```bash
 make prod-up
 ```
 
-3. Застосуйте міграції:
+4. Застосуйте міграції:
 
 ```bash
 make prod-migrate
@@ -111,7 +119,7 @@ make prod-backup
 - `frontend`
 - `migrate`
 
-За умови, що не видалені named volumes, можна безпечно робити:
+За умови, що `${PMM_DATA_ROOT}` не видалено, можна безпечно робити:
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
@@ -124,7 +132,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
 ```bash
 docker compose down -v
-docker volume rm ...
+rm -rf /opt/pmm-data
 ```
 
 Це видаляє persistent volumes і може призвести до втрати:
@@ -136,7 +144,7 @@ docker volume rm ...
 
 ## Backup / restore
 
-- Backup створюється в `backend_backups`
+- Backup створюється в `${PMM_DATA_ROOT}/backups`
 - Для ручного production backup:
 
 ```bash
@@ -150,9 +158,20 @@ make prod-backup
 - Для production не використовуйте `docker-compose.dev.yml`
 - Для Dokploy використовуйте тільки `docker-compose.prod.yml`
 - Для локальної розробки не використовуйте `docker-compose.prod.yml`
+- Весь production storage лежить під `${PMM_DATA_ROOT}`; це зручно для backup, переносу і ручного огляду файлів
 - Якщо змінюються Python або Node dependencies, потрібен rebuild image
 - `frontend_node_modules` — dev-only volume; його можна безпечно видаляти при проблемах з локальним frontend
 - update subsystem у production залишився окремою production-функцією і не тягнеться в dev workflow
+
+## Міграція зі старих Docker volumes
+
+Якщо production вже працював на named volumes, спочатку перенесіть дані в `${PMM_DATA_ROOT}`:
+
+```bash
+sudo ./scripts/migrate-prod-data-to-host.sh pmm-pmm-uy3fkl /opt/pmm-data
+```
+
+де `pmm-pmm-uy3fkl` — Dokploy compose project name.
 
 ## Мінімальний operational workflow
 

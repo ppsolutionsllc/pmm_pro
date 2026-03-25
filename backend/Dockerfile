@@ -47,7 +47,7 @@ COPY ./app /app/app
 COPY ./alembic /app/alembic
 COPY ./alembic.ini /app/alembic.ini
 COPY ./scripts /app/scripts
-RUN addgroup --system app && adduser --system --ingroup app app \
+RUN addgroup --system --gid 10001 app && adduser --system --uid 10001 --ingroup app app \
     && chmod +x /app/scripts/*.sh \
     && mkdir -p /var/lib/pmm/artifacts /var/lib/pmm/backups /var/log/pmm /tmp/.cache/fontconfig \
     && chown -R app:app /app /var/lib/pmm /var/log/pmm /tmp/.cache

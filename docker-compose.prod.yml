@@ -49,7 +49,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-pmm}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ${PMM_DATA_ROOT:-/opt/pmm-data}/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -71,9 +71,9 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - backend_artifacts:/var/lib/pmm/artifacts
-      - backend_backups:/var/lib/pmm/backups
-      - backend_logs:/var/log/pmm
+      - ${PMM_DATA_ROOT:-/opt/pmm-data}/artifacts:/var/lib/pmm/artifacts
+      - ${PMM_DATA_ROOT:-/opt/pmm-data}/backups:/var/lib/pmm/backups
+      - ${PMM_DATA_ROOT:-/opt/pmm-data}/logs:/var/log/pmm
     expose:
       - "8000"
     healthcheck:
@@ -121,9 +121,3 @@ services:
 
 networks:
   app:
-
-volumes:
-  db_data:
-  backend_artifacts:
-  backend_backups:
-  backend_logs:

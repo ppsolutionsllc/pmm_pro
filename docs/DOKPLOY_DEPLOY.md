@@ -21,11 +21,15 @@ Routing is managed by Dokploy Domains UI. Manual Traefik labels in compose are i
 - `db` now uses a direct stable image: `postgres:15`
 - `docker-compose.prod.yml` is self-contained and does not depend on `docker-compose.yml`
 - backend entrypoint waits for PostgreSQL and runs `alembic upgrade head` before starting `gunicorn`
+- all persistent production data is stored under one host root `${PMM_DATA_ROOT}` (default `/opt/pmm-data`)
 - Kept only internal ports with `expose`:
   - `frontend: 80`
   - `backend: 8000`
-- Preserved named volumes for persistent data:
-  - `pgdata`, `pmm_artifacts`, `pmm_backups`, `pmm_logs`
+- Persistent host directories:
+  - `${PMM_DATA_ROOT}/postgres`
+  - `${PMM_DATA_ROOT}/artifacts`
+  - `${PMM_DATA_ROOT}/backups`
+  - `${PMM_DATA_ROOT}/logs`
 - Kept healthchecks for db/backend/frontend.
 - Backend startup in prod now uses `/app/scripts/start-backend-prod.sh`.
 
@@ -40,6 +44,8 @@ Set these in Dokploy project Environment/Secrets before deploy:
 
 - `POSTGRES_PASSWORD`
   - DB password for PostgreSQL and backend connection string.
+- `PMM_DATA_ROOT`
+  - Example: `/opt/pmm-data`
 - `POSTGRES_USER`
   - Example: `pmm`
 - `POSTGRES_DB`
@@ -67,13 +73,19 @@ Set these in Dokploy project Environment/Secrets before deploy:
 3. Connect/select GitHub repository and branch.
 4. Set `Compose Path` to `docker-compose.prod.yml`.
 5. Open `Environment` and add required env vars listed above.
-6. Deploy service.
-7. Open `Domains` tab:
+6. Before first deploy, prepare host directories on the server:
+
+```bash
+sudo ./scripts/prepare-prod-data-root.sh /opt/pmm-data
+```
+
+7. Deploy service.
+8. Open `Domains` tab:
    - Add domain `pmm.66br.pp.ua`
    - Select service `frontend`
    - Set container port `80`
    - Enable TLS/HTTPS in Dokploy UI.
-8. Save and redeploy (if Dokploy prompts).
+9. Save and redeploy (if Dokploy prompts).
 
 ## Post-Deploy Verification
 Run/check:
