@@ -1175,7 +1175,7 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
             "agreed_name": str(layout_signatures.get("agreed_name") or ""),
         }
 
-    generated_at = utcnow().isoformat()
+    generated_at = _format_value(utcnow(), "datetime")
     barcode_value = build_unique_barcode_value(
         [
             "PMM",
