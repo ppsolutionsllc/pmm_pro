@@ -118,9 +118,11 @@ def _default_layout_json() -> dict[str, Any]:
             "show": True,
             "use_department_signatures": True,
             "approval_title": "З розрахунком згоден:",
+            "approval_rank": "",
             "approval_position": "Командир взводу матеріального забезпечення",
             "approval_name": "",
             "agreed_title": "ПОГОДЖЕНО:",
+            "agreed_rank": "",
             "agreed_position": "Заступник командира бригади:",
             "agreed_name": "",
         },
@@ -1571,11 +1573,17 @@ async def ensure_default_template(db: AsyncSession) -> None:
                 if "approval_position" not in signatures:
                     signatures["approval_position"] = "Командир взводу матеріального забезпечення"
                     sig_changed = True
+                if "approval_rank" not in signatures:
+                    signatures["approval_rank"] = ""
+                    sig_changed = True
                 if "approval_name" not in signatures:
                     signatures["approval_name"] = ""
                     sig_changed = True
                 if "agreed_title" not in signatures:
                     signatures["agreed_title"] = "ПОГОДЖЕНО:"
+                    sig_changed = True
+                if "agreed_rank" not in signatures:
+                    signatures["agreed_rank"] = ""
                     sig_changed = True
                 if "agreed_position" not in signatures:
                     signatures["agreed_position"] = "Заступник командира бригади:"

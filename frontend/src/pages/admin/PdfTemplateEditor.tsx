@@ -521,6 +521,14 @@ const PdfTemplateEditor: React.FC = () => {
                 />
               </div>
               <div>
+                <label className="label">З розрахунком згоден — звання (адмінка)</label>
+                <input
+                  className="input-field"
+                  value={versionState?.layout_json?.signatures?.approval_rank || ''}
+                  onChange={(e) => updateLayoutNode('signatures', { approval_rank: e.target.value })}
+                />
+              </div>
+              <div>
                 <label className="label">З розрахунком згоден — посада (адмінка)</label>
                 <input
                   className="input-field"
@@ -542,6 +550,14 @@ const PdfTemplateEditor: React.FC = () => {
                   className="input-field"
                   value={versionState?.layout_json?.signatures?.agreed_title || 'ПОГОДЖЕНО:'}
                   onChange={(e) => updateLayoutNode('signatures', { agreed_title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">ПОГОДЖЕНО — звання (адмінка)</label>
+                <input
+                  className="input-field"
+                  value={versionState?.layout_json?.signatures?.agreed_rank || ''}
+                  onChange={(e) => updateLayoutNode('signatures', { agreed_rank: e.target.value })}
                 />
               </div>
               <div>
