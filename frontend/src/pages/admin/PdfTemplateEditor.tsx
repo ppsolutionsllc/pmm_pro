@@ -611,11 +611,11 @@ const PdfTemplateEditor: React.FC = () => {
             <button className="btn-ghost w-full" onClick={downloadPreview} disabled={!previewRequestId}>Завантажити PDF превʼю</button>
           </div>
         </div>
-        <div className="rounded-xl border border-mil-700 min-h-[620px] overflow-hidden bg-black/20">
+        <div className="rounded-xl border border-mil-700 overflow-hidden bg-black/20">
           {previewUrl ? (
-            <iframe title="pdf-preview" src={previewUrl} className="w-full h-[620px]" />
+            <iframe title="pdf-preview" src={previewUrl} className="w-full h-[760px] bg-white" />
           ) : (
-            <div className="text-xs text-gray-500 p-3">Сформуйте превʼю для перегляду</div>
+            <div className="text-xs text-gray-500 p-3 min-h-[760px]">Сформуйте превʼю для перегляду</div>
           )}
         </div>
       </div>
