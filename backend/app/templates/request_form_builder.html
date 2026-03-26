@@ -143,12 +143,33 @@
     }
 
     .signatures .line {
+      margin-bottom: 10px;
+    }
+
+    .signature-position {
+      margin-bottom: 2px;
+    }
+
+    .signature-rank-name {
       display: flex;
       justify-content: space-between;
       gap: 12px;
       border-bottom: 1px solid #000;
-      margin-bottom: 6px;
       padding-bottom: 2px;
+      min-height: 22px;
+      align-items: flex-end;
+    }
+
+    .signature-rank {
+      flex: 1 1 auto;
+      text-align: left;
+      padding-right: 12px;
+    }
+
+    .signature-name {
+      flex: 0 0 auto;
+      text-align: right;
+      white-space: nowrap;
     }
 
     .muted {
@@ -348,14 +369,20 @@
       <div class="signatures">
         <div>{{ signatures.approval_title or "З розрахунком згоден:" }}</div>
         <div class="line">
-          <span>{{ ([signatures.approval_rank, signatures.approval_position]|select|join(' ')) or "—" }}</span>
-          <span>{{ signatures.approval_name or "—" }}</span>
+          <div class="signature-position">{{ signatures.approval_position or "—" }}</div>
+          <div class="signature-rank-name">
+            <span class="signature-rank">{{ signatures.approval_rank or "—" }}</span>
+            <span class="signature-name">{{ signatures.approval_name or "—" }}</span>
+          </div>
         </div>
 
         <div>{{ signatures.agreed_title or "ПОГОДЖЕНО:" }}</div>
         <div class="line">
-          <span>{{ ([signatures.agreed_rank, signatures.agreed_position]|select|join(' ')) or "—" }}</span>
-          <span>{{ signatures.agreed_name or "—" }}</span>
+          <div class="signature-position">{{ signatures.agreed_position or "—" }}</div>
+          <div class="signature-rank-name">
+            <span class="signature-rank">{{ signatures.agreed_rank or "—" }}</span>
+            <span class="signature-name">{{ signatures.agreed_name or "—" }}</span>
+          </div>
         </div>
         <div class="muted">Дата подання: {{ doc.auto_sign_date or "—" }}</div>
       </div>
