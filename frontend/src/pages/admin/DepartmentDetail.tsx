@@ -17,9 +17,11 @@ const DepartmentDetail: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [signatures, setSignatures] = useState<any>({
     approval_title: 'З розрахунком згоден:',
+    approval_rank: '',
     approval_position: '',
     approval_name: '',
     agreed_title: 'ПОГОДЖЕНО:',
+    agreed_rank: '',
     agreed_position: '',
     agreed_name: '',
   });
@@ -40,9 +42,11 @@ const DepartmentDetail: React.FC = () => {
       setUsers(u);
       setSignatures({
         approval_title: s?.approval_title || 'З розрахунком згоден:',
+        approval_rank: s?.approval_rank || '',
         approval_position: s?.approval_position || '',
         approval_name: s?.approval_name || '',
         agreed_title: s?.agreed_title || 'ПОГОДЖЕНО:',
+        agreed_rank: s?.agreed_rank || '',
         agreed_position: s?.agreed_position || '',
         agreed_name: s?.agreed_name || '',
       });
@@ -93,6 +97,7 @@ const DepartmentDetail: React.FC = () => {
     try {
       await api.updateDepartmentPrintSignatures(Number(id), {
         agreed_title: signatures.agreed_title,
+        agreed_rank: signatures.agreed_rank,
         agreed_position: signatures.agreed_position,
         agreed_name: signatures.agreed_name,
       });
@@ -146,6 +151,14 @@ const DepartmentDetail: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
+                  <label className="label">З розрахунком згоден — звання</label>
+                  <input
+                    className="input-field"
+                    value={signatures.approval_rank}
+                    disabled
+                  />
+                </div>
+                <div>
                   <label className="label">З розрахунком згоден — посада</label>
                   <input
                     className="input-field"
@@ -174,6 +187,14 @@ const DepartmentDetail: React.FC = () => {
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">ПОГОДЖЕНО — звання</label>
+                  <input
+                    className="input-field"
+                    value={signatures.agreed_rank}
+                    onChange={(e) => setSignatures({ ...signatures, agreed_rank: e.target.value })}
+                  />
+                </div>
                 <div>
                   <label className="label">ПОГОДЖЕНО — посада</label>
                   <input

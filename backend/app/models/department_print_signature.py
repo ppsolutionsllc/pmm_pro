@@ -12,10 +12,12 @@ class DepartmentPrintSignature(Base):
     department_id = Column(Integer, ForeignKey("departments.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
 
     approval_title = Column(String(255), nullable=False, default="З розрахунком згоден:")
+    approval_rank = Column(String(255), nullable=False, default="")
     approval_position = Column(String(255), nullable=False, default="")
     approval_name = Column(String(255), nullable=False, default="")
 
     agreed_title = Column(String(255), nullable=False, default="ПОГОДЖЕНО:")
+    agreed_rank = Column(String(255), nullable=False, default="")
     agreed_position = Column(String(255), nullable=False, default="")
     agreed_name = Column(String(255), nullable=False, default="")
 

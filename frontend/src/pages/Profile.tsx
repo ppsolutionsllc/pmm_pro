@@ -15,9 +15,11 @@ const Profile: React.FC = () => {
   const [departments, setDepartments] = React.useState<any[]>([]);
   const [signatures, setSignatures] = React.useState<any>({
     approval_title: 'З розрахунком згоден:',
+    approval_rank: '',
     approval_position: '',
     approval_name: '',
     agreed_title: 'ПОГОДЖЕНО:',
+    agreed_rank: '',
     agreed_position: '',
     agreed_name: '',
   });
@@ -41,9 +43,11 @@ const Profile: React.FC = () => {
         if (!mounted) return;
         setSignatures({
           approval_title: row?.approval_title || 'З розрахунком згоден:',
+          approval_rank: row?.approval_rank || '',
           approval_position: row?.approval_position || '',
           approval_name: row?.approval_name || '',
           agreed_title: row?.agreed_title || 'ПОГОДЖЕНО:',
+          agreed_rank: row?.agreed_rank || '',
           agreed_position: row?.agreed_position || '',
           agreed_name: row?.agreed_name || '',
         });
@@ -72,6 +76,7 @@ const Profile: React.FC = () => {
     try {
       await api.updateMyDepartmentPrintSignatures({
         approval_title: signatures.approval_title,
+        approval_rank: signatures.approval_rank,
         approval_position: signatures.approval_position,
         approval_name: signatures.approval_name,
       });
@@ -143,6 +148,15 @@ const Profile: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
+                <label className="label">З розрахунком згоден — звання</label>
+                <input
+                  className="input-field"
+                  value={signatures.approval_rank}
+                  onChange={(e) => setSignatures({ ...signatures, approval_rank: e.target.value })}
+                  disabled={signaturesLoading || signaturesSaving}
+                />
+              </div>
+              <div>
                 <label className="label">З розрахунком згоден — посада</label>
                 <input
                   className="input-field"
@@ -166,6 +180,10 @@ const Profile: React.FC = () => {
               <input className="input-field" value={signatures.agreed_title} disabled />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="label">ПОГОДЖЕНО — звання</label>
+                <input className="input-field" value={signatures.agreed_rank} disabled />
+              </div>
               <div>
                 <label className="label">ПОГОДЖЕНО — посада</label>
                 <input className="input-field" value={signatures.agreed_position} disabled />

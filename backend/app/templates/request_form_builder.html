@@ -35,7 +35,7 @@
     .sheet {
       width: 100%;
       box-sizing: border-box;
-      padding-bottom: 30mm;
+      padding-bottom: 22mm;
     }
 
     .to-line {
@@ -164,7 +164,7 @@
       position: fixed;
       left: 0;
       right: 0;
-      bottom: 10mm;
+      bottom: 3mm;
       background: #fff;
     }
 
@@ -348,13 +348,13 @@
       <div class="signatures">
         <div>{{ signatures.approval_title or "З розрахунком згоден:" }}</div>
         <div class="line">
-          <span>{{ signatures.approval_position or "—" }}</span>
+          <span>{{ ([signatures.approval_rank, signatures.approval_position]|select|join(' ')) or "—" }}</span>
           <span>{{ signatures.approval_name or "—" }}</span>
         </div>
 
         <div>{{ signatures.agreed_title or "ПОГОДЖЕНО:" }}</div>
         <div class="line">
-          <span>{{ signatures.agreed_position or "—" }}</span>
+          <span>{{ ([signatures.agreed_rank, signatures.agreed_position]|select|join(' ')) or "—" }}</span>
           <span>{{ signatures.agreed_name or "—" }}</span>
         </div>
         <div class="muted">Дата подання: {{ doc.auto_sign_date or "—" }}</div>

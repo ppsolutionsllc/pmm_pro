@@ -25,9 +25,11 @@ class DepartmentOut(DepartmentBase):
 
 class DepartmentPrintSignatureBase(BaseModel):
     approval_title: str = "З розрахунком згоден:"
+    approval_rank: str = ""
     approval_position: str = ""
     approval_name: str = ""
     agreed_title: str = "ПОГОДЖЕНО:"
+    agreed_rank: str = ""
     agreed_position: str = ""
     agreed_name: str = ""
 
@@ -38,12 +40,14 @@ class DepartmentPrintSignatureUpdate(DepartmentPrintSignatureBase):
 
 class DepartmentPrintSignatureDeptUpdate(BaseModel):
     approval_title: str = "З розрахунком згоден:"
+    approval_rank: str = ""
     approval_position: str = ""
     approval_name: str = ""
 
 
 class DepartmentPrintSignatureAdminUpdate(BaseModel):
     agreed_title: str = "ПОГОДЖЕНО:"
+    agreed_rank: str = ""
     agreed_position: str = ""
     agreed_name: str = ""
 

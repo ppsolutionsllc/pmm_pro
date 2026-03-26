@@ -63,9 +63,11 @@ async def set_my_department_print_signatures(
         department_id=current_user.department_id,
         data={
             "approval_title": payload.approval_title,
+            "approval_rank": payload.approval_rank,
             "approval_position": payload.approval_position,
             "approval_name": payload.approval_name,
             "agreed_title": current_row.agreed_title,
+            "agreed_rank": current_row.agreed_rank,
             "agreed_position": current_row.agreed_position,
             "agreed_name": current_row.agreed_name,
         },
@@ -129,9 +131,11 @@ async def set_department_print_signatures(
         department_id=dept_id,
         data={
             "approval_title": current_row.approval_title,
+            "approval_rank": current_row.approval_rank,
             "approval_position": current_row.approval_position,
             "approval_name": current_row.approval_name,
             "agreed_title": payload.agreed_title,
+            "agreed_rank": payload.agreed_rank,
             "agreed_position": payload.agreed_position,
             "agreed_name": payload.agreed_name,
         },

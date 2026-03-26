@@ -944,9 +944,11 @@ def _normalize_signature_payload(payload: dict[str, Any] | None) -> dict[str, st
     data = payload or {}
     return {
         "approval_title": str(data.get("approval_title") or DEFAULT_APPROVAL_TITLE).strip() or DEFAULT_APPROVAL_TITLE,
+        "approval_rank": str(data.get("approval_rank") or "").strip(),
         "approval_position": str(data.get("approval_position") or "").strip(),
         "approval_name": str(data.get("approval_name") or "").strip(),
         "agreed_title": str(data.get("agreed_title") or DEFAULT_AGREED_TITLE).strip() or DEFAULT_AGREED_TITLE,
+        "agreed_rank": str(data.get("agreed_rank") or "").strip(),
         "agreed_position": str(data.get("agreed_position") or "").strip(),
         "agreed_name": str(data.get("agreed_name") or "").strip(),
     }
@@ -979,9 +981,11 @@ async def _load_department_signatures(db: AsyncSession, req: Request) -> dict[st
         return _normalize_signature_payload(
             {
                 "approval_title": row.approval_title,
+                "approval_rank": row.approval_rank,
                 "approval_position": row.approval_position,
                 "approval_name": row.approval_name,
                 "agreed_title": row.agreed_title,
+                "agreed_rank": row.agreed_rank,
                 "agreed_position": row.agreed_position,
                 "agreed_name": row.agreed_name,
             }
@@ -1154,12 +1158,16 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
         resolved_signatures = {
             "approval_title": ctx_signatures.get("approval_title")
             or str(layout_signatures.get("approval_title") or DEFAULT_APPROVAL_TITLE),
+            "approval_rank": ctx_signatures.get("approval_rank")
+            or str(layout_signatures.get("approval_rank") or ""),
             "approval_position": ctx_signatures.get("approval_position")
             or str(layout_signatures.get("approval_position") or ""),
             "approval_name": ctx_signatures.get("approval_name")
             or str(layout_signatures.get("approval_name") or ""),
             "agreed_title": ctx_signatures.get("agreed_title")
             or str(layout_signatures.get("agreed_title") or DEFAULT_AGREED_TITLE),
+            "agreed_rank": ctx_signatures.get("agreed_rank")
+            or str(layout_signatures.get("agreed_rank") or ""),
             "agreed_position": ctx_signatures.get("agreed_position")
             or str(layout_signatures.get("agreed_position") or ""),
             "agreed_name": ctx_signatures.get("agreed_name")
@@ -1168,9 +1176,11 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
     else:
         resolved_signatures = {
             "approval_title": str(layout_signatures.get("approval_title") or DEFAULT_APPROVAL_TITLE),
+            "approval_rank": str(layout_signatures.get("approval_rank") or ""),
             "approval_position": str(layout_signatures.get("approval_position") or ""),
             "approval_name": str(layout_signatures.get("approval_name") or ""),
             "agreed_title": str(layout_signatures.get("agreed_title") or DEFAULT_AGREED_TITLE),
+            "agreed_rank": str(layout_signatures.get("agreed_rank") or ""),
             "agreed_position": str(layout_signatures.get("agreed_position") or ""),
             "agreed_name": str(layout_signatures.get("agreed_name") or ""),
         }
