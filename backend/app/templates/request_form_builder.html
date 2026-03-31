@@ -67,8 +67,12 @@
     .to-line {
       text-align: right;
       font-size: 11pt;
-      margin-bottom: 18px;
+      margin-bottom: 8px;
       font-weight: 700;
+    }
+
+    .header-block {
+      margin-top: 16px;
     }
 
     .title {
@@ -80,7 +84,7 @@
     }
 
     .lead {
-      margin: 0 0 14px;
+      margin: 0 0 6px;
       text-align: center;
       font-size: 10.5pt;
       line-height: 1.15;
@@ -306,11 +310,13 @@
   <div class="sheet">
     <div class="to-line">{{ (doc.layout.header.commander_line if doc.layout and doc.layout.header and doc.layout.header.commander_line else "Командиру військової частини A7014") }}</div>
 
-    <h1 class="title">{{ (doc.layout.header.title if doc.layout and doc.layout.header and doc.layout.header.title else "ЗАЯВКА") }}</h1>
-    <p class="lead">
-      {{ (doc.layout.header.subtitle if doc.layout and doc.layout.header and doc.layout.header.subtitle else "Прошу, Вас дати вказівку начальнику служби ПММ, що до видачі пального на бойову підготовку") }}
-      <span class="unit">{{ (doc.department.name if doc.department and doc.department.name else "підрозділу") }}</span>.
-    </p>
+    <div class="header-block">
+      <h1 class="title">{{ (doc.layout.header.title if doc.layout and doc.layout.header and doc.layout.header.title else "ЗАЯВКА") }}</h1>
+      <p class="lead">
+        {{ (doc.layout.header.subtitle if doc.layout and doc.layout.header and doc.layout.header.subtitle else "Прошу, Вас дати вказівку начальнику служби ПММ, що до видачі пального на бойову підготовку") }}
+        <span class="unit">{{ (doc.department.name if doc.department and doc.department.name else "підрозділу") }}</span>.
+      </p>
+    </div>
 
     {% set comp = (doc["computed"] if doc["computed"] is defined else {}) %}
     {% set cols = (doc.table.columns if doc.table and doc.table.columns else []) %}
