@@ -64,8 +64,8 @@ const Login: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
             <Fuel size={32} className="text-accent" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-100">Облік ПММ</h1>
-          <p className="text-sm text-gray-500 mt-1">Увійдіть до системи</p>
+          <h1 className="text-2xl font-bold text-gray-100">Заявки на ПММ 66 ОМБР</h1>
+          <p className="text-sm text-gray-500 mt-1">Вдділення підготовки</p>
         </div>
 
         <form onSubmit={submit} className="card space-y-4">
