@@ -13,6 +13,7 @@ from app.models.request import Request, RequestStatus
 from app.models.request_item import RequestItem
 from app.models.stock import DebtStatus, FuelDebt, FuelType, StockAdjustmentLine, StockBalance, StockIssue, StockIssueLine, StockReceipt
 from app.models.vehicle import Vehicle
+from app.core.quantities import round_up_quantity, round_up_signed_quantity
 
 
 def _fuel_key_order(value: str) -> int:
@@ -73,24 +74,24 @@ async def build_stock_reconcile_rows(db: AsyncSession) -> list[dict[str, Any]]:
         row = by_fuel[fuel_type]
         expected_liters = row["receipts_liters"] - row["issues_liters"] + row["adjustments_liters"]
         expected_kg = row["receipts_kg"] - row["issues_kg"] + row["adjustments_kg"]
-        diff_liters = round(expected_liters - row["balance_liters"], 6)
-        diff_kg = round(expected_kg - row["balance_kg"], 2)
+        diff_liters = round_up_signed_quantity(expected_liters - row["balance_liters"])
+        diff_kg = round_up_signed_quantity(expected_kg - row["balance_kg"])
         rows.append(
             {
                 "fuel_type": fuel_type,
-                "receipts_liters": round(row["receipts_liters"], 6),
-                "receipts_kg": round(row["receipts_kg"], 2),
-                "issues_liters": round(row["issues_liters"], 6),
-                "issues_kg": round(row["issues_kg"], 2),
-                "adjustments_liters": round(row["adjustments_liters"], 6),
-                "adjustments_kg": round(row["adjustments_kg"], 2),
-                "expected_balance_liters": round(expected_liters, 6),
-                "expected_balance_kg": round(expected_kg, 2),
-                "actual_balance_liters": round(row["balance_liters"], 6),
-                "actual_balance_kg": round(row["balance_kg"], 2),
-                "difference_liters": diff_liters,
-                "difference_kg": diff_kg,
-                "is_consistent": abs(diff_liters) < 1e-6 and abs(diff_kg) < 1e-2,
+                "receipts_liters": float(round_up_quantity(row["receipts_liters"])),
+                "receipts_kg": float(round_up_quantity(row["receipts_kg"])),
+                "issues_liters": float(round_up_quantity(row["issues_liters"])),
+                "issues_kg": float(round_up_quantity(row["issues_kg"])),
+                "adjustments_liters": float(round_up_signed_quantity(row["adjustments_liters"])),
+                "adjustments_kg": float(round_up_signed_quantity(row["adjustments_kg"])),
+                "expected_balance_liters": float(round_up_signed_quantity(expected_liters)),
+                "expected_balance_kg": float(round_up_signed_quantity(expected_kg)),
+                "actual_balance_liters": float(round_up_signed_quantity(row["balance_liters"])),
+                "actual_balance_kg": float(round_up_signed_quantity(row["balance_kg"])),
+                "difference_liters": float(diff_liters),
+                "difference_kg": float(diff_kg),
+                "is_consistent": diff_liters == 0 and diff_kg == 0,
             }
         )
     return rows
@@ -162,8 +163,8 @@ async def build_vehicle_consumption_rows(
             {
                 **row,
                 "total_km": round(float(row["total_km"]), 3),
-                "requested_liters": round(float(row["requested_liters"]), 3),
-                "requested_kg": round(float(row["requested_kg"]), 2),
+                "requested_liters": float(round_up_quantity(row["requested_liters"])),
+                "requested_kg": float(round_up_quantity(row["requested_kg"])),
                 "requests_count": len(row["requests_count"]),
             }
         )
@@ -197,8 +198,8 @@ async def build_debts_rows(
                 "request_number": req.request_number,
                 "department_id": req.department_id,
                 "fuel_type": debt.fuel_type.value if debt.fuel_type else None,
-                "missing_liters": float(debt.missing_liters or 0.0),
-                "missing_kg": float(debt.missing_kg or 0.0),
+                "missing_liters": float(round_up_quantity(debt.missing_liters or 0.0)),
+                "missing_kg": float(round_up_quantity(debt.missing_kg or 0.0)),
                 "status": debt.status.value if getattr(debt, "status", None) else str(debt.status),
                 "created_at": debt.created_at.isoformat() if debt.created_at else None,
                 "closed_at": debt.closed_at.isoformat() if debt.closed_at else None,
@@ -323,12 +324,12 @@ async def build_department_consumption_rows(
         out.append(
             {
                 **row,
-                "requested_ab_liters": round(float(row["requested_ab_liters"]), 3),
-                "requested_dp_liters": round(float(row["requested_dp_liters"]), 3),
-                "issued_ab_liters": round(float(row["issued_ab_liters"]), 3),
-                "issued_dp_liters": round(float(row["issued_dp_liters"]), 3),
-                "debt_ab_liters": round(float(row["debt_ab_liters"]), 3),
-                "debt_dp_liters": round(float(row["debt_dp_liters"]), 3),
+                "requested_ab_liters": float(round_up_quantity(row["requested_ab_liters"])),
+                "requested_dp_liters": float(round_up_quantity(row["requested_dp_liters"])),
+                "issued_ab_liters": float(round_up_quantity(row["issued_ab_liters"])),
+                "issued_dp_liters": float(round_up_quantity(row["issued_dp_liters"])),
+                "debt_ab_liters": float(round_up_quantity(row["debt_ab_liters"])),
+                "debt_dp_liters": float(round_up_quantity(row["debt_dp_liters"])),
             }
         )
     out.sort(key=lambda r: (r["department_name"] or "").lower())

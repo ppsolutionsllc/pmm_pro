@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.time import utcnow
+from app.core.quantities import round_up_quantity, round_up_signed_quantity
 from app.crud import app_settings as crud_app_settings
 from app.crud import department_print_signature as crud_dept_signature
 from app.crud import settings as crud_settings
@@ -301,8 +302,8 @@ def _aggregate_requested_by_fuel(req: Request, coeff: dict[FuelType, float]) -> 
 
     for ft, agg in out.items():
         c = float(coeff[ft])
-        agg["requested_liters"] = round(agg["requested_liters"], 6)
-        agg["requested_kg"] = round(agg["requested_liters"] * c, 2)
+        agg["requested_liters"] = float(round_up_quantity(agg["requested_liters"]))
+        agg["requested_kg"] = float(round_up_quantity(agg["requested_liters"] * c))
     return out
 
 
@@ -362,8 +363,8 @@ async def create_request_snapshot(
             }
 
     for ft in (FuelType.AB, FuelType.DP):
-        fuel_breakdown[ft]["requested_liters"] = round(fuel_breakdown[ft]["requested_liters"], 6)
-        fuel_breakdown[ft]["requested_kg"] = round(fuel_breakdown[ft]["requested_kg"], 2)
+        fuel_breakdown[ft]["requested_liters"] = float(round_up_quantity(fuel_breakdown[ft]["requested_liters"]))
+        fuel_breakdown[ft]["requested_kg"] = float(round_up_quantity(fuel_breakdown[ft]["requested_kg"]))
 
     dept_signature = await crud_dept_signature.get_by_department_id(db, req.department_id)
     signature_payload = crud_dept_signature.row_to_payload(dept_signature)
@@ -387,8 +388,8 @@ async def create_request_snapshot(
         "items": items_payload,
         "vehicles": list(vehicles_payload.values()),
         "totals": {
-            "requested_liters": round(sum(i["required_liters"] for i in items_payload), 6),
-            "requested_kg": round(sum(i["required_kg"] for i in items_payload), 2),
+            "requested_liters": float(round_up_quantity(sum(i["required_liters"] for i in items_payload))),
+            "requested_kg": float(round_up_quantity(sum(i["required_kg"] for i in items_payload))),
         },
         "fuel_breakdown": {
             FuelType.AB.value: fuel_breakdown[FuelType.AB],
@@ -871,8 +872,8 @@ async def confirm_request_posting(
         agg = requested_by_fuel[ft]
         bal = await _lock_balance(db, ft)
 
-        requested_liters = float(agg["requested_liters"])
-        available_liters = max(float(bal.balance_liters or 0.0), 0.0)
+        requested_liters = round_up_quantity(agg["requested_liters"])
+        available_liters = max(int(float(bal.balance_liters or 0.0)), 0)
 
         own_reservation = 0.0
         own_reservation_row: StockReservation | None = None
@@ -891,21 +892,21 @@ async def confirm_request_posting(
             for res in reservations:
                 total_reserved += float(res.reserved_liters or 0.0)
                 if res.request_id == req.id:
-                    own_reservation = float(res.reserved_liters or 0.0)
+                    own_reservation = round_up_quantity(res.reserved_liters or 0.0)
                     own_reservation_row = res
-            free_unreserved = max(available_liters - total_reserved, 0.0)
+            free_unreserved = max(available_liters - round_up_quantity(total_reserved), 0)
             available_liters = min(available_liters, own_reservation + free_unreserved)
 
         issued_liters = min(requested_liters, available_liters)
-        missing_liters = round(requested_liters - issued_liters, 6)
+        missing_liters = max(requested_liters - issued_liters, 0)
 
         c = float(coeff[ft])
-        issued_kg = round(issued_liters * c, 2)
-        missing_kg = round(missing_liters * c, 2)
+        issued_kg = round_up_quantity(issued_liters * c)
+        missing_kg = round_up_quantity(missing_liters * c)
 
         if issued_liters > 0:
-            bal.balance_liters = round(float(bal.balance_liters) - issued_liters, 6)
-            bal.balance_kg = round(float(bal.balance_kg) - issued_kg, 2)
+            bal.balance_liters = float(float(bal.balance_liters) - issued_liters)
+            bal.balance_kg = float(float(bal.balance_kg) - issued_kg)
             if bal.balance_liters < -1e-6 or bal.balance_kg < -1e-6:
                 raise WorkflowConflictError("Posting would lead to negative stock balance")
             db.add(
@@ -936,27 +937,27 @@ async def confirm_request_posting(
                 stock_issue_id=issue.id,
                 fuel_type=ft,
                 requested_liters=requested_liters,
-                requested_kg=float(agg["requested_kg"]),
-                issued_liters=issued_liters,
-                issued_kg=issued_kg,
-                missing_liters=missing_liters,
-                missing_kg=missing_kg,
+                requested_kg=float(round_up_quantity(agg["requested_kg"])),
+                issued_liters=float(issued_liters),
+                issued_kg=float(issued_kg),
+                missing_liters=float(missing_liters),
+                missing_kg=float(missing_kg),
             )
         )
 
         if reservation_enabled and own_reservation_row is not None:
             own_reservation_row.status = ReservationStatus.CONSUMED
 
-        issue.issue_liters = round(issue.issue_liters + issued_liters, 6)
-        issue.issue_kg = round(issue.issue_kg + issued_kg, 2)
-        issue.debt_liters = round(issue.debt_liters + missing_liters, 6)
-        issue.debt_kg = round(issue.debt_kg + missing_kg, 2)
+        issue.issue_liters = float(issue.issue_liters + issued_liters)
+        issue.issue_kg = float(issue.issue_kg + issued_kg)
+        issue.debt_liters = float(issue.debt_liters + missing_liters)
+        issue.debt_kg = float(issue.debt_kg + missing_kg)
 
         breakdown_rows.append(
             {
                 "fuel_type": ft.value,
                 "requested_liters": requested_liters,
-                "requested_kg": float(agg["requested_kg"]),
+                "requested_kg": float(round_up_quantity(agg["requested_kg"])),
                 "issued_liters": issued_liters,
                 "issued_kg": issued_kg,
                 "missing_liters": missing_liters,
@@ -1057,8 +1058,8 @@ async def create_adjustment(
         fuel_type = ln.get("fuel_type")
         if isinstance(fuel_type, str):
             fuel_type = FuelType(fuel_type)
-        delta_liters = float(ln.get("delta_liters", 0.0))
-        delta_kg = float(ln.get("delta_kg", 0.0))
+        delta_liters = float(round_up_signed_quantity(ln.get("delta_liters", 0.0)))
+        delta_kg = float(round_up_signed_quantity(ln.get("delta_kg", 0.0)))
         request_id = ln.get("request_id")
         comment = ln.get("comment")
 

@@ -13,6 +13,7 @@ from app.models.stock import (
 )
 from app.models.request_item import RequestItem
 from app.crud import settings as crud_settings
+from app.core.quantities import round_up_quantity
 from app.core.time import utcnow
 
 
@@ -26,28 +27,30 @@ async def create_stock_receipt(db: AsyncSession, fuel_type: StockFuelType, input
     if not dens:
         raise ValueError("Density settings not configured")
     if input_unit == "L":
-        liters = input_amount
+        liters = round_up_quantity(input_amount)
         factor = dens.density_factor_ab if fuel_type == StockFuelType.AB else dens.density_factor_dp
-        kg = round(liters * factor, 2)
+        kg = round_up_quantity(liters * factor)
+        input_amount = float(liters)
     else:
-        kg = input_amount
+        kg = round_up_quantity(input_amount)
         factor = dens.density_factor_ab if fuel_type == StockFuelType.AB else dens.density_factor_dp
-        liters = round(kg / factor, 2)
+        liters = round_up_quantity(kg / factor)
+        input_amount = float(kg)
     # record receipt
     receipt = StockReceipt(
         fuel_type=fuel_type,
         input_unit=input_unit,
         input_amount=input_amount,
-        computed_liters=liters,
-        computed_kg=kg,
+        computed_liters=float(liters),
+        computed_kg=float(kg),
         created_by=created_by,
     )
     db.add(receipt)
     # ledger plus
     ledger = StockLedger(
         fuel_type=fuel_type,
-        delta_liters=liters,
-        delta_kg=kg,
+        delta_liters=float(liters),
+        delta_kg=float(kg),
         ref_type=RefType.RECEIPT,
         ref_id=0,  # will update after flush
     )
@@ -60,11 +63,11 @@ async def create_stock_receipt(db: AsyncSession, fuel_type: StockFuelType, input
     bal = await db.execute(select(StockBalance).where(StockBalance.fuel_type == fuel_type))
     bal = bal.scalars().first()
     if not bal:
-        bal = StockBalance(fuel_type=fuel_type, balance_liters=liters, balance_kg=kg)
+        bal = StockBalance(fuel_type=fuel_type, balance_liters=float(liters), balance_kg=float(kg))
         db.add(bal)
     else:
-        bal.balance_liters += liters
-        bal.balance_kg += kg
+        bal.balance_liters += float(liters)
+        bal.balance_kg += float(kg)
     await db.commit()
     await db.refresh(receipt)
     return receipt
@@ -86,14 +89,15 @@ async def create_issue_from_request(db: AsyncSession, req, *, commit: bool = Tru
     for item in fresh_req.items:
         if fuel_type is None:
             fuel_type = item.vehicle.fuel_type
-        total_liters += item.required_liters
+        total_liters += float(item.required_liters or 0.0)
     if fuel_type is None:
         raise ValueError("Cannot determine fuel type")
     dens = await crud_settings.get_settings(db)
     if not dens:
         raise ValueError("Density settings not configured")
     factor = dens.density_factor_ab if fuel_type == StockFuelType.AB else dens.density_factor_dp
-    issue_kg = round(total_liters * factor, 2)
+    total_liters = round_up_quantity(total_liters)
+    issue_kg = round_up_quantity(total_liters * factor)
     issue = StockIssue(
         request_id=req.id,
         issue_doc_no=f"PMM-LEGACY-{req.id}",
@@ -104,16 +108,16 @@ async def create_issue_from_request(db: AsyncSession, req, *, commit: bool = Tru
         debt_liters=0.0,
         debt_kg=0.0,
         fuel_type=fuel_type,
-        issue_liters=total_liters,
-        issue_kg=issue_kg,
+        issue_liters=float(total_liters),
+        issue_kg=float(issue_kg),
         created_by=req.dept_confirmed_by,
     )
     db.add(issue)
     # ledger minus
     ledger = StockLedger(
         fuel_type=fuel_type,
-        delta_liters=-total_liters,
-        delta_kg=-issue_kg,
+        delta_liters=-float(total_liters),
+        delta_kg=-float(issue_kg),
         ref_type=RefType.ISSUE,
         ref_id=req.id,
     )
@@ -122,11 +126,11 @@ async def create_issue_from_request(db: AsyncSession, req, *, commit: bool = Tru
     bal = await db.execute(select(StockBalance).where(StockBalance.fuel_type == fuel_type))
     bal = bal.scalars().first()
     if not bal:
-        bal = StockBalance(fuel_type=fuel_type, balance_liters=-total_liters, balance_kg=-issue_kg)
+        bal = StockBalance(fuel_type=fuel_type, balance_liters=-float(total_liters), balance_kg=-float(issue_kg))
         db.add(bal)
     else:
-        bal.balance_liters += -total_liters
-        bal.balance_kg += -issue_kg
+        bal.balance_liters += -float(total_liters)
+        bal.balance_kg += -float(issue_kg)
     if commit:
         await db.commit()
     return issue

@@ -7,6 +7,7 @@ import Modal from '../../components/Modal';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { useToast } from '../../components/Toast';
 import { api } from '../../api';
+import { roundUpSignedQuantity } from '../../utils/quantities';
 
 const StockAdjustments: React.FC = () => {
   const navigate = useNavigate();
@@ -53,8 +54,8 @@ const StockAdjustments: React.FC = () => {
       toast('Вкажіть причину коригування', 'warning');
       return;
     }
-    const liters = Number(deltaLiters || 0);
-    const kg = Number(deltaKg || 0);
+    const liters = roundUpSignedQuantity(deltaLiters || 0);
+    const kg = roundUpSignedQuantity(deltaKg || 0);
     if (!Number.isFinite(liters) || !Number.isFinite(kg) || (Math.abs(liters) < 1e-9 && Math.abs(kg) < 1e-9)) {
       toast('Вкажіть delta літрів або кг', 'warning');
       return;
@@ -157,11 +158,11 @@ const StockAdjustments: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Δ Літри</label>
-              <input className="input-field" type="number" step="0.000001" value={deltaLiters} onChange={(e) => setDeltaLiters(e.target.value)} />
+              <input className="input-field" type="number" step="1" value={deltaLiters} onChange={(e) => setDeltaLiters(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Δ Кг</label>
-              <input className="input-field" type="number" step="0.01" value={deltaKg} onChange={(e) => setDeltaKg(e.target.value)} />
+              <input className="input-field" type="number" step="1" value={deltaKg} onChange={(e) => setDeltaKg(e.target.value)} />
             </div>
           </div>
           <div>

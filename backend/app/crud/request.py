@@ -4,6 +4,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 
 from app.core.time import utcnow
+from app.core.quantities import round_up_quantity
 from app.models.request import Request, RequestStatus
 from app.models.request_item import RequestItem
 from app.models.vehicle import Vehicle
@@ -119,14 +120,14 @@ async def add_item(
         raise ValueError("Vehicle belongs to another department")
 
     total_km = distance_km_per_trip * effective_training_days
-    liters = total_km * vehicle.consumption_l_per_km
+    liters = round_up_quantity(total_km * vehicle.consumption_l_per_km)
     # compute kg snapshot using density settings
     from app.crud import settings as crud_settings
     dens = await crud_settings.get_settings(db)
     if not dens:
         raise ValueError("Density settings not configured")
     factor = dens.density_factor_ab if vehicle.fuel_type == StockFuelType.AB else dens.density_factor_dp
-    kg = round(liters * factor, 2)
+    kg = round_up_quantity(liters * factor)
 
     item = RequestItem(
         request_id=request_id,
@@ -141,8 +142,8 @@ async def add_item(
         training_days_count=effective_training_days,
         consumption_l_per_km_snapshot=vehicle.consumption_l_per_km,
         total_km=total_km,
-        required_liters=liters,
-        required_kg=kg,
+        required_liters=float(liters),
+        required_kg=float(kg),
     )
     db.add(item)
     await db.commit()

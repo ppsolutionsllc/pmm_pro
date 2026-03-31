@@ -8,6 +8,7 @@ import Modal from '../../components/Modal';
 import { useToast } from '../../components/Toast';
 import { api } from '../../api';
 import { ArrowLeft, Edit, CheckCircle, Printer, XCircle, FileText } from 'lucide-react';
+import { formatQuantity } from '../../utils/quantities';
 
 const RequestDetail: React.FC = () => {
   const { id } = useParams();
@@ -153,7 +154,7 @@ const RequestDetail: React.FC = () => {
     },
     { key: 'vehicle_fuel_type', title: 'Паливо' },
     { key: 'total_km', title: 'Км', render: (r: any) => r.total_km?.toFixed(1) },
-    { key: 'required_liters', title: 'Літри', render: (r: any) => r.required_liters?.toFixed(2) },
+    { key: 'required_liters', title: 'Літри', render: (r: any) => formatQuantity(r.required_liters) },
   ];
 
   const timeline = [
@@ -207,10 +208,10 @@ const RequestDetail: React.FC = () => {
                 {(req.fuel_summary || []).map((r: any) => (
                   <tr key={r.fuel_type} className="border-b border-mil-800">
                     <td className="py-2 pr-3 text-gray-200">{r.fuel_type}</td>
-                    <td className="py-2 pr-3 text-gray-300">{Number(r.requested_liters || 0).toFixed(2)}</td>
-                    <td className="py-2 pr-3 text-gray-300">{Number(r.issued_liters || 0).toFixed(2)}</td>
-                    <td className={`py-2 pr-3 ${Number(r.missing_liters || 0) > 0 ? 'text-danger' : 'text-gray-300'}`}>{Number(r.missing_liters || 0).toFixed(2)}</td>
-                    <td className={`py-2 pr-3 ${Number(r.missing_kg || 0) > 0 ? 'text-danger' : 'text-gray-300'}`}>{Number(r.missing_kg || 0).toFixed(2)}</td>
+                    <td className="py-2 pr-3 text-gray-300">{formatQuantity(r.requested_liters)}</td>
+                    <td className="py-2 pr-3 text-gray-300">{formatQuantity(r.issued_liters)}</td>
+                    <td className={`py-2 pr-3 ${Number(r.missing_liters || 0) > 0 ? 'text-danger' : 'text-gray-300'}`}>{formatQuantity(r.missing_liters)}</td>
+                    <td className={`py-2 pr-3 ${Number(r.missing_kg || 0) > 0 ? 'text-danger' : 'text-gray-300'}`}>{formatQuantity(r.missing_kg)}</td>
                   </tr>
                 ))}
               </tbody>

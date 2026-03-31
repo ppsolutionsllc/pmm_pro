@@ -190,22 +190,22 @@
       <tr>
         <td class="align-center">{{ row.row_no }}</td>
         <td class="align-center">{{ row.fuel_type }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.requested_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.requested_kg) }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.issued_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.issued_kg) }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.missing_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(row.missing_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.requested_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.requested_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.issued_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.issued_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.missing_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(row.missing_kg) }}</td>
       </tr>
       {% endfor %}
       <tr class="totals">
         <td colspan="2">Усього</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.requested_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.requested_kg) }}</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.issued_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.issued_kg) }}</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.missing_liters) }}</td>
-        <td class="align-right">{{ "%.2f"|format(doc.totals.missing_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.requested_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.requested_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.issued_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.issued_kg) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.missing_liters) }}</td>
+        <td class="align-right">{{ "%.0f"|format(doc.totals.missing_kg) }}</td>
       </tr>
     </tbody>
   </table>

@@ -28,6 +28,7 @@ from app.crud import request as crud_request
 from app.services import job_service
 from app.services import pdf_template_service
 from app.services import request_workflow as workflow
+from app.core.quantities import round_up_quantity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,6 +39,20 @@ def _status_str(v):
     if hasattr(v, "value"):
         return v.value
     return v
+
+
+def _rounded_row(row: dict) -> dict:
+    out = dict(row)
+    for key in (
+        "requested_liters",
+        "requested_kg",
+        "issued_liters",
+        "issued_kg",
+        "missing_liters",
+        "missing_kg",
+    ):
+        out[key] = float(round_up_quantity(out.get(key) or 0.0))
+    return out
 
 
 def _requested_fuel_summary(req: Request) -> dict[FuelType, dict[str, float]]:
@@ -63,8 +78,8 @@ def _requested_fuel_summary(req: Request) -> dict[FuelType, dict[str, float]]:
 
     for ft, row in out.items():
         c = coeff[ft] if coeff[ft] > 0 else 0.0
-        row["requested_liters"] = round(row["requested_liters"], 6)
-        row["requested_kg"] = round(row["requested_liters"] * c, 2) if c else 0.0
+        row["requested_liters"] = float(round_up_quantity(row["requested_liters"]))
+        row["requested_kg"] = float(round_up_quantity(row["requested_liters"] * c)) if c else 0.0
     return out
 
 
@@ -75,16 +90,16 @@ def _fuel_summary_rows(req: Request) -> list[dict]:
         for ln in issue.lines or []:
             ft = ln.fuel_type
             row = requested[ft]
-            row["requested_liters"] = round(float(ln.requested_liters or row["requested_liters"]), 6)
-            row["requested_kg"] = round(float(ln.requested_kg or row["requested_kg"]), 2)
-            row["issued_liters"] = round(float(ln.issued_liters or 0.0), 6)
-            row["issued_kg"] = round(float(ln.issued_kg or 0.0), 2)
-            row["missing_liters"] = round(float(ln.missing_liters or 0.0), 6)
-            row["missing_kg"] = round(float(ln.missing_kg or 0.0), 2)
+            row["requested_liters"] = float(round_up_quantity(ln.requested_liters or row["requested_liters"]))
+            row["requested_kg"] = float(round_up_quantity(ln.requested_kg or row["requested_kg"]))
+            row["issued_liters"] = float(round_up_quantity(ln.issued_liters or 0.0))
+            row["issued_kg"] = float(round_up_quantity(ln.issued_kg or 0.0))
+            row["missing_liters"] = float(round_up_quantity(ln.missing_liters or 0.0))
+            row["missing_kg"] = float(round_up_quantity(ln.missing_kg or 0.0))
 
     rows = []
     for ft in sorted(requested.keys(), key=lambda x: 0 if x == FuelType.AB else 1):
-        rows.append({"fuel_type": ft.value, **requested[ft]})
+        rows.append(_rounded_row({"fuel_type": ft.value, **requested[ft]}))
     return rows
 
 
@@ -96,7 +111,7 @@ def _debt_rows(req: Request) -> list[dict]:
             if float(ln.missing_liters or 0.0) <= 0:
                 continue
             out.append(
-                {
+                _rounded_row({
                     "fuel_type": ln.fuel_type.value,
                     "requested_liters": float(ln.requested_liters or 0.0),
                     "requested_kg": float(ln.requested_kg or 0.0),
@@ -104,7 +119,7 @@ def _debt_rows(req: Request) -> list[dict]:
                     "issued_kg": float(ln.issued_kg or 0.0),
                     "missing_liters": float(ln.missing_liters or 0.0),
                     "missing_kg": float(ln.missing_kg or 0.0),
-                }
+                })
             )
         return out
 
@@ -113,7 +128,7 @@ def _debt_rows(req: Request) -> list[dict]:
         if str(getattr(d.status, "value", d.status)) != "OPEN":
             continue
         out.append(
-            {
+            _rounded_row({
                 "fuel_type": d.fuel_type.value,
                 "requested_liters": 0.0,
                 "requested_kg": 0.0,
@@ -121,7 +136,7 @@ def _debt_rows(req: Request) -> list[dict]:
                 "issued_kg": 0.0,
                 "missing_liters": float(d.missing_liters or 0.0),
                 "missing_kg": float(d.missing_kg or 0.0),
-            }
+            })
         )
     return out
 
@@ -136,7 +151,7 @@ def _fuel_summary_rows_from_breakdown(breakdown: dict | None) -> list[dict]:
         posted = node.get("posted") or {}
         debt = node.get("debt") or {}
         rows.append(
-            {
+            _rounded_row({
                 "fuel_type": ft,
                 "requested_liters": float(requested.get("liters") or 0.0),
                 "requested_kg": float(requested.get("kg") or 0.0),
@@ -144,7 +159,7 @@ def _fuel_summary_rows_from_breakdown(breakdown: dict | None) -> list[dict]:
                 "issued_kg": float(posted.get("kg") or 0.0),
                 "missing_liters": float(debt.get("liters") or 0.0),
                 "missing_kg": float(debt.get("kg") or 0.0),
-            }
+            })
         )
     return rows
 
@@ -164,7 +179,7 @@ def _persisted_fuel_summary_rows(issue: StockIssue | None, breakdown_override: d
     if issue:
         for ln in issue.lines or []:
             out.append(
-                {
+                _rounded_row({
                     "fuel_type": ln.fuel_type.value,
                     "requested_liters": float(ln.requested_liters or 0.0),
                     "requested_kg": float(ln.requested_kg or 0.0),
@@ -172,7 +187,7 @@ def _persisted_fuel_summary_rows(issue: StockIssue | None, breakdown_override: d
                     "issued_kg": float(ln.issued_kg or 0.0),
                     "missing_liters": float(ln.missing_liters or 0.0),
                     "missing_kg": float(ln.missing_kg or 0.0),
-                }
+                })
             )
     out.sort(key=lambda r: 0 if r.get("fuel_type") == FuelType.AB.value else 1)
     return out
@@ -620,8 +635,8 @@ async def get_request_detail(
                 "training_days_count": getattr(item, "training_days_count", None),
                 "consumption_l_per_km_snapshot": item.consumption_l_per_km_snapshot,
                 "total_km": item.total_km,
-                "required_liters": item.required_liters,
-                "required_kg": item.required_kg,
+                "required_liters": float(round_up_quantity(item.required_liters)),
+                "required_kg": float(round_up_quantity(item.required_kg)),
             }
         )
 

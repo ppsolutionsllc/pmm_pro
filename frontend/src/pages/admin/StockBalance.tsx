@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
+import { formatQuantity, roundUpQuantity } from '../../utils/quantities';
 
 const StockBalance: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -30,8 +31,8 @@ const StockBalance: React.FC = () => {
   const dp = balance.find((b: any) => b.fuel_type === 'ДП');
 
   const balanceData = [
-    { fuel: 'АБ', liters: ab?.balance_liters || 0, kg: ab?.balance_kg || 0 },
-    { fuel: 'ДП', liters: dp?.balance_liters || 0, kg: dp?.balance_kg || 0 },
+    { fuel: 'АБ', liters: roundUpQuantity(ab?.balance_liters), kg: roundUpQuantity(ab?.balance_kg) },
+    { fuel: 'ДП', liters: roundUpQuantity(dp?.balance_liters), kg: roundUpQuantity(dp?.balance_kg) },
   ];
 
   return (
@@ -46,11 +47,11 @@ const StockBalance: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500 uppercase">Літри</p>
-              <p className="text-2xl font-bold text-blue-400">{ab?.balance_liters?.toFixed(2) || '0.00'}</p>
+              <p className="text-2xl font-bold text-blue-400">{formatQuantity(ab?.balance_liters)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase">Кілограми</p>
-              <p className="text-2xl font-bold text-blue-400">{ab?.balance_kg?.toFixed(2) || '0.00'}</p>
+              <p className="text-2xl font-bold text-blue-400">{formatQuantity(ab?.balance_kg)}</p>
             </div>
           </div>
         </div>
@@ -63,11 +64,11 @@ const StockBalance: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500 uppercase">Літри</p>
-              <p className="text-2xl font-bold text-amber-400">{dp?.balance_liters?.toFixed(2) || '0.00'}</p>
+              <p className="text-2xl font-bold text-amber-400">{formatQuantity(dp?.balance_liters)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase">Кілограми</p>
-              <p className="text-2xl font-bold text-amber-400">{dp?.balance_kg?.toFixed(2) || '0.00'}</p>
+              <p className="text-2xl font-bold text-amber-400">{formatQuantity(dp?.balance_kg)}</p>
             </div>
           </div>
         </div>

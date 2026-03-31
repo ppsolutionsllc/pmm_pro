@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.core.quantities import round_up_quantity
 from app.core.time import utcnow
 from app.crud import department_print_signature as crud_dept_signature
 from app.models.department import Department
@@ -53,6 +54,17 @@ jinja_env = Environment(
 AVAILABLE_FORMATS = ["text", "number_0", "number_2", "date", "datetime"]
 AVAILABLE_VISIBILITY_RULES = ["ALWAYS", "IF_STATUS_IN", "IF_DEBT_GT_0", "IF_ROLE_IS_ADMIN"]
 AVAILABLE_TEXT_STYLES = ["normal", "bold", "italic"]
+
+QUANTITY_SOURCES = {
+    "computed.need_10_days_ab",
+    "computed.need_10_days_dp",
+    "computed.total_ab_liters",
+    "computed.total_dp_liters",
+    "computed.debt_ab_liters",
+    "computed.debt_dp_liters",
+    "item.required_liters",
+    "item.required_kg",
+}
 
 AVAILABLE_SOURCES = [
     "request.request_number",
@@ -260,6 +272,12 @@ def _format_value(value: Any, fmt: str) -> str:
         except Exception:
             return str(value)
     return str(value)
+
+
+def _format_source_value(value: Any, source: str, fmt: str) -> str:
+    if source in QUANTITY_SOURCES:
+        return _format_value(round_up_quantity(value), "number_0")
+    return _format_value(value, fmt)
 
 
 def _normalize_column(column: dict[str, Any], index: int) -> dict[str, Any]:
@@ -881,7 +899,7 @@ def _build_item_rows(req: Request) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for idx, item in enumerate(req.items or [], start=1):
         fuel_type = item.vehicle.fuel_type.value if getattr(item, "vehicle", None) and item.vehicle and item.vehicle.fuel_type else None
-        required_liters = float(item.required_liters or 0.0)
+        required_liters = float(round_up_quantity(item.required_liters or 0.0))
         row = {
             "row_no": idx,
             "planned_activity_name": item.planned_activity.name if getattr(item, "planned_activity", None) else None,
@@ -892,7 +910,7 @@ def _build_item_rows(req: Request) -> list[dict[str, Any]]:
             "distance_km_per_trip": item.distance_km_per_trip if item.distance_km_per_trip is not None else req.distance_km_per_trip,
             "total_km": float(item.total_km or 0.0),
             "required_liters": required_liters,
-            "required_kg": float(item.required_kg or 0.0),
+            "required_kg": float(round_up_quantity(item.required_kg or 0.0)),
             "consumption_l_per_100km": float(item.vehicle.consumption_l_per_100km or 0.0) if getattr(item, "vehicle", None) else 0.0,
             "justification_text": item.justification_text or req.justification_text,
             "need_10_days_ab": required_liters if fuel_type == FuelType.AB.value else 0.0,
@@ -903,8 +921,8 @@ def _build_item_rows(req: Request) -> list[dict[str, Any]]:
 
 
 def _build_totals(req: Request, rows: list[dict[str, Any]]) -> dict[str, float]:
-    total_ab = round(sum(float(r.get("required_liters") or 0.0) for r in rows if r.get("vehicle_fuel_type") == FuelType.AB.value), 2)
-    total_dp = round(sum(float(r.get("required_liters") or 0.0) for r in rows if r.get("vehicle_fuel_type") == FuelType.DP.value), 2)
+    total_ab = round_up_quantity(sum(float(r.get("required_liters") or 0.0) for r in rows if r.get("vehicle_fuel_type") == FuelType.AB.value))
+    total_dp = round_up_quantity(sum(float(r.get("required_liters") or 0.0) for r in rows if r.get("vehicle_fuel_type") == FuelType.DP.value))
 
     debt_ab = 0.0
     debt_dp = 0.0
@@ -916,10 +934,10 @@ def _build_totals(req: Request, rows: list[dict[str, Any]]) -> dict[str, float]:
             elif line.fuel_type == FuelType.DP:
                 debt_dp += float(line.missing_liters or 0.0)
     return {
-        "total_ab_liters": round(total_ab, 2),
-        "total_dp_liters": round(total_dp, 2),
-        "debt_ab_liters": round(debt_ab, 2),
-        "debt_dp_liters": round(debt_dp, 2),
+        "total_ab_liters": float(total_ab),
+        "total_dp_liters": float(total_dp),
+        "debt_ab_liters": float(round_up_quantity(debt_ab)),
+        "debt_dp_liters": float(round_up_quantity(debt_dp)),
     }
 
 
@@ -1074,7 +1092,7 @@ def _build_render_rows(columns: list[dict[str, Any]], request_ctx: dict[str, Any
                     "align": col.get("align") or "left",
                     "text_style": col.get("text_style") or "normal",
                     "font_size_pt": col.get("font_size_pt") or 11,
-                    "value": _format_value(raw, col.get("format") or "text"),
+                    "value": _format_source_value(raw, str(col.get("source") or ""), col.get("format") or "text"),
                 }
             )
         rows.append({"cells": row_cells})
@@ -1131,7 +1149,7 @@ def _build_doc_view(snapshot: dict[str, Any], *, base_url: str) -> dict[str, Any
         source = str(node.get("source") or "")
         label = str(node.get("label") or source)
         value = _resolve_source_value(source, request_ctx=request_ctx, item_ctx=None)
-        totals_fields.append({"label": label, "value": _format_value(value, "number_2")})
+        totals_fields.append({"label": label, "value": _format_source_value(value, source, "number_2")})
 
     service_fields = []
     for node in (template_version.get("mapping_json") or {}).get("service_fields") or []:
@@ -1270,12 +1288,12 @@ async def build_request_issue_act_pdf(
             {
                 "row_no": idx,
                 "fuel_type": line.fuel_type.value if line.fuel_type else "—",
-                "requested_liters": float(line.requested_liters or 0.0),
-                "requested_kg": float(line.requested_kg or 0.0),
-                "issued_liters": float(line.issued_liters or 0.0),
-                "issued_kg": float(line.issued_kg or 0.0),
-                "missing_liters": float(line.missing_liters or 0.0),
-                "missing_kg": float(line.missing_kg or 0.0),
+                "requested_liters": float(round_up_quantity(line.requested_liters or 0.0)),
+                "requested_kg": float(round_up_quantity(line.requested_kg or 0.0)),
+                "issued_liters": float(round_up_quantity(line.issued_liters or 0.0)),
+                "issued_kg": float(round_up_quantity(line.issued_kg or 0.0)),
+                "missing_liters": float(round_up_quantity(line.missing_liters or 0.0)),
+                "missing_kg": float(round_up_quantity(line.missing_kg or 0.0)),
             }
         )
 
@@ -1284,21 +1302,21 @@ async def build_request_issue_act_pdf(
             {
                 "row_no": 1,
                 "fuel_type": issue.fuel_type.value if issue.fuel_type else "—",
-                "requested_liters": float(issue.issue_liters or 0.0),
-                "requested_kg": float(issue.issue_kg or 0.0),
-                "issued_liters": float(issue.issue_liters or 0.0),
-                "issued_kg": float(issue.issue_kg or 0.0),
-                "missing_liters": float(issue.debt_liters or 0.0),
-                "missing_kg": float(issue.debt_kg or 0.0),
+                "requested_liters": float(round_up_quantity(issue.issue_liters or 0.0)),
+                "requested_kg": float(round_up_quantity(issue.issue_kg or 0.0)),
+                "issued_liters": float(round_up_quantity(issue.issue_liters or 0.0)),
+                "issued_kg": float(round_up_quantity(issue.issue_kg or 0.0)),
+                "missing_liters": float(round_up_quantity(issue.debt_liters or 0.0)),
+                "missing_kg": float(round_up_quantity(issue.debt_kg or 0.0)),
             }
         )
 
-    requested_liters_total = round(sum(float(r["requested_liters"]) for r in line_rows), 2)
-    requested_kg_total = round(sum(float(r["requested_kg"]) for r in line_rows), 2)
-    issued_liters_total = round(sum(float(r["issued_liters"]) for r in line_rows), 2)
-    issued_kg_total = round(sum(float(r["issued_kg"]) for r in line_rows), 2)
-    missing_liters_total = round(sum(float(r["missing_liters"]) for r in line_rows), 2)
-    missing_kg_total = round(sum(float(r["missing_kg"]) for r in line_rows), 2)
+    requested_liters_total = round_up_quantity(sum(float(r["requested_liters"]) for r in line_rows))
+    requested_kg_total = round_up_quantity(sum(float(r["requested_kg"]) for r in line_rows))
+    issued_liters_total = round_up_quantity(sum(float(r["issued_liters"]) for r in line_rows))
+    issued_kg_total = round_up_quantity(sum(float(r["issued_kg"]) for r in line_rows))
+    missing_liters_total = round_up_quantity(sum(float(r["missing_liters"]) for r in line_rows))
+    missing_kg_total = round_up_quantity(sum(float(r["missing_kg"]) for r in line_rows))
 
     generated_at = utcnow().isoformat()
     barcode_value = build_unique_barcode_value(

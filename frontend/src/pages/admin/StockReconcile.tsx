@@ -3,6 +3,7 @@ import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import { api } from '../../api';
 import { useToast } from '../../components/Toast';
+import { formatQuantity, formatSignedQuantity } from '../../utils/quantities';
 
 const StockReconcile: React.FC = () => {
   const { toast } = useToast();
@@ -59,17 +60,17 @@ const StockReconcile: React.FC = () => {
 
   const columns = [
     { key: 'fuel_type', title: 'Паливо' },
-    { key: 'receipts_liters', title: 'Прихід (л)' },
-    { key: 'issues_liters', title: 'Видача (л)' },
-    { key: 'adjustments_liters', title: 'Коригування (л)' },
-    { key: 'expected_balance_liters', title: 'Очікувано (л)' },
-    { key: 'actual_balance_liters', title: 'Факт (л)' },
+    { key: 'receipts_liters', title: 'Прихід (л)', render: (r: any) => formatQuantity(r.receipts_liters) },
+    { key: 'issues_liters', title: 'Видача (л)', render: (r: any) => formatQuantity(r.issues_liters) },
+    { key: 'adjustments_liters', title: 'Коригування (л)', render: (r: any) => formatSignedQuantity(r.adjustments_liters) },
+    { key: 'expected_balance_liters', title: 'Очікувано (л)', render: (r: any) => formatSignedQuantity(r.expected_balance_liters) },
+    { key: 'actual_balance_liters', title: 'Факт (л)', render: (r: any) => formatSignedQuantity(r.actual_balance_liters) },
     {
       key: 'difference_liters',
       title: 'Різниця (л)',
       render: (r: any) => (
         <span className={Math.abs(Number(r.difference_liters || 0)) < 0.000001 ? 'text-accent' : 'text-danger'}>
-          {Number(r.difference_liters || 0).toFixed(3)}
+          {formatSignedQuantity(r.difference_liters)}
         </span>
       ),
     },

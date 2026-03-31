@@ -3,6 +3,7 @@ import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import { api } from '../../api';
 import { useToast } from '../../components/Toast';
+import { formatQuantity } from '../../utils/quantities';
 
 const VehicleReport: React.FC = () => {
   const { toast } = useToast();
@@ -70,8 +71,8 @@ const VehicleReport: React.FC = () => {
     { key: 'fuel_type', title: 'Паливо' },
     { key: 'route', title: 'Маршрут' },
     { key: 'total_km', title: 'Км' },
-    { key: 'requested_liters', title: 'Літри' },
-    { key: 'requested_kg', title: 'Кг' },
+    { key: 'requested_liters', title: 'Літри', render: (r: any) => formatQuantity(r.requested_liters) },
+    { key: 'requested_kg', title: 'Кг', render: (r: any) => formatQuantity(r.requested_kg) },
     { key: 'requests_count', title: 'К-ть заявок' },
   ];
 

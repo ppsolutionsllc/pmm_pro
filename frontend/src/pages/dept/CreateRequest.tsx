@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast';
 import { useAuth } from '../../auth';
 import { api } from '../../api';
 import { Plus, Send, Save, Trash2 } from 'lucide-react';
+import { formatQuantity, roundUpQuantity } from '../../utils/quantities';
 
 const CreateRequest: React.FC = () => {
   const { id } = useParams();
@@ -76,10 +77,10 @@ const CreateRequest: React.FC = () => {
     const veh = vehicles.find((v: any) => v.id === Number(itemForm.vehicle_id));
     if (!veh || !density) return null;
     const totalKm = distance * trainingDays;
-    const liters = totalKm * veh.consumption_l_per_km;
+    const liters = roundUpQuantity(totalKm * veh.consumption_l_per_km);
     const factor = veh.fuel_type === 'АБ' ? density.density_factor_ab : density.density_factor_dp;
-    const kg = liters * factor;
-    return { totalKm: totalKm.toFixed(1), liters: liters.toFixed(2), kg: kg.toFixed(2), fuelType: veh.fuel_type };
+    const kg = roundUpQuantity(liters * factor);
+    return { totalKm: totalKm.toFixed(1), liters: String(liters), kg: String(kg), fuelType: veh.fuel_type };
   };
 
   const computeDraftRow = (vehicleId: number) => {
@@ -88,9 +89,9 @@ const CreateRequest: React.FC = () => {
     const trainingDays = toIntOrNull((form as any).training_days_count);
     if (!veh || distance === null || trainingDays === null || trainingDays <= 0) return null;
     const totalKm = distance * trainingDays;
-    const liters = totalKm * veh.consumption_l_per_km;
+    const liters = roundUpQuantity(totalKm * veh.consumption_l_per_km);
     const factor = density ? (veh.fuel_type === 'АБ' ? density.density_factor_ab : density.density_factor_dp) : null;
-    const kg = factor !== null ? liters * factor : null;
+    const kg = factor !== null ? roundUpQuantity(liters * factor) : null;
     return {
       vehicle_name: veh.brand,
       vehicle_plate: veh.identifier,
@@ -286,8 +287,8 @@ const CreateRequest: React.FC = () => {
     { key: 'vehicle_name', title: 'Транспорт', render: (r: any) => `${r.vehicle_name || ''} ${r.vehicle_plate || ''}` },
     { key: 'vehicle_fuel_type', title: 'Паливо' },
     { key: 'total_km', title: 'Км', render: (r: any) => r.total_km?.toFixed(1) },
-    { key: 'required_liters', title: 'Літри', render: (r: any) => r.required_liters?.toFixed(2) },
-    { key: 'required_kg', title: 'Кг', render: (r: any) => r.required_kg?.toFixed(2) },
+    { key: 'required_liters', title: 'Літри', render: (r: any) => formatQuantity(r.required_liters) },
+    { key: 'required_kg', title: 'Кг', render: (r: any) => formatQuantity(r.required_kg) },
     { key: 'actions', title: '', render: (r: any) => (
       <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(r.id); }} className="text-danger hover:text-danger/80"><Trash2 size={16} /></button>
     )},

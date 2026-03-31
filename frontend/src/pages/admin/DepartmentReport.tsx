@@ -4,6 +4,7 @@ import DataTable from '../../components/DataTable';
 import { api } from '../../api';
 import { useToast } from '../../components/Toast';
 import { Printer } from 'lucide-react';
+import { formatQuantity } from '../../utils/quantities';
 
 const REQUEST_STATUSES = [
   { value: '', label: 'Усі статуси' },
@@ -84,12 +85,12 @@ const DepartmentReport: React.FC = () => {
         <td>${esc(r.requests_count ?? 0)}</td>
         <td>${esc(r.posted_count ?? 0)}</td>
         <td>${esc(r.debt_requests_count ?? 0)}</td>
-        <td>${esc(Number(r.requested_ab_liters || 0).toFixed(2))}</td>
-        <td>${esc(Number(r.requested_dp_liters || 0).toFixed(2))}</td>
-        <td>${esc(Number(r.issued_ab_liters || 0).toFixed(2))}</td>
-        <td>${esc(Number(r.issued_dp_liters || 0).toFixed(2))}</td>
-        <td>${esc(Number(r.debt_ab_liters || 0).toFixed(2))}</td>
-        <td>${esc(Number(r.debt_dp_liters || 0).toFixed(2))}</td>
+        <td>${esc(formatQuantity(r.requested_ab_liters))}</td>
+        <td>${esc(formatQuantity(r.requested_dp_liters))}</td>
+        <td>${esc(formatQuantity(r.issued_ab_liters))}</td>
+        <td>${esc(formatQuantity(r.issued_dp_liters))}</td>
+        <td>${esc(formatQuantity(r.debt_ab_liters))}</td>
+        <td>${esc(formatQuantity(r.debt_dp_liters))}</td>
       </tr>
     `).join('');
 
@@ -160,12 +161,12 @@ const DepartmentReport: React.FC = () => {
     { key: 'requests_count', title: 'Заявок' },
     { key: 'posted_count', title: 'Проведено' },
     { key: 'debt_requests_count', title: 'З боргом' },
-    { key: 'requested_ab_liters', title: 'Запитано АБ (л)', render: (r: any) => Number(r.requested_ab_liters || 0).toFixed(2) },
-    { key: 'requested_dp_liters', title: 'Запитано ДП (л)', render: (r: any) => Number(r.requested_dp_liters || 0).toFixed(2) },
-    { key: 'issued_ab_liters', title: 'Видано АБ (л)', render: (r: any) => Number(r.issued_ab_liters || 0).toFixed(2) },
-    { key: 'issued_dp_liters', title: 'Видано ДП (л)', render: (r: any) => Number(r.issued_dp_liters || 0).toFixed(2) },
-    { key: 'debt_ab_liters', title: 'Борг АБ (л)', render: (r: any) => Number(r.debt_ab_liters || 0).toFixed(2) },
-    { key: 'debt_dp_liters', title: 'Борг ДП (л)', render: (r: any) => Number(r.debt_dp_liters || 0).toFixed(2) },
+    { key: 'requested_ab_liters', title: 'Запитано АБ (л)', render: (r: any) => formatQuantity(r.requested_ab_liters) },
+    { key: 'requested_dp_liters', title: 'Запитано ДП (л)', render: (r: any) => formatQuantity(r.requested_dp_liters) },
+    { key: 'issued_ab_liters', title: 'Видано АБ (л)', render: (r: any) => formatQuantity(r.issued_ab_liters) },
+    { key: 'issued_dp_liters', title: 'Видано ДП (л)', render: (r: any) => formatQuantity(r.issued_dp_liters) },
+    { key: 'debt_ab_liters', title: 'Борг АБ (л)', render: (r: any) => formatQuantity(r.debt_ab_liters) },
+    { key: 'debt_dp_liters', title: 'Борг ДП (л)', render: (r: any) => formatQuantity(r.debt_dp_liters) },
   ];
 
   return (

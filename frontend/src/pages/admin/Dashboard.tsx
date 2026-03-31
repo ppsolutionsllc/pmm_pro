@@ -6,6 +6,7 @@ import StatusBadge from '../../components/StatusBadge';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { api } from '../../api';
 import { CheckSquare, Clock, CheckCircle, Fuel, CalendarRange } from 'lucide-react';
+import { formatQuantity } from '../../utils/quantities';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -71,15 +72,15 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title="Баланс АБ / ДП"
-          value={`${balAB?.balance_liters?.toFixed(1) || 0} / ${balDP?.balance_liters?.toFixed(1) || 0} л`}
-          subtitle={`${balAB?.balance_kg?.toFixed(1) || 0} / ${balDP?.balance_kg?.toFixed(1) || 0} кг`}
+          value={`${formatQuantity(balAB?.balance_liters)} / ${formatQuantity(balDP?.balance_liters)} л`}
+          subtitle={`${formatQuantity(balAB?.balance_kg)} / ${formatQuantity(balDP?.balance_kg)} кг`}
           color="gray"
           icon={<Fuel size={28} />}
           onClick={() => navigate('/admin/stock/balance')}
         />
         <StatCard
           title="АБ (минулого місяця)"
-          value={`${prevMonthUsage.ab.toFixed(1)} л`}
+          value={`${formatQuantity(prevMonthUsage.ab)} л`}
           subtitle={prevMonthLabel}
           color="orange"
           icon={<CalendarRange size={28} />}
@@ -87,7 +88,7 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title="ДП (минулого місяця)"
-          value={`${prevMonthUsage.dp.toFixed(1)} л`}
+          value={`${formatQuantity(prevMonthUsage.dp)} л`}
           subtitle={prevMonthLabel}
           color="orange"
           icon={<CalendarRange size={28} />}

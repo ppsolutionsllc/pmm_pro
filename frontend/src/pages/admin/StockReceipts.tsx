@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast';
 import { api } from '../../api';
 import { Plus, Printer } from 'lucide-react';
 import { ledgerRefTypeLabel } from '../../utils/humanLabels';
+import { formatQuantity, formatSignedQuantity, roundUpQuantity } from '../../utils/quantities';
 
 const StockReceipts: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -42,8 +43,8 @@ const StockReceipts: React.FC = () => {
     if (!density || !form.input_amount) return { liters: 0, kg: 0 };
     const amount = parseFloat(form.input_amount) || 0;
     const factor = form.fuel_type === 'АБ' ? density.density_factor_ab : density.density_factor_dp;
-    if (form.input_unit === 'L') return { liters: amount, kg: +(amount * factor).toFixed(2) };
-    return { liters: +(amount / factor).toFixed(2), kg: amount };
+    if (form.input_unit === 'L') return { liters: roundUpQuantity(amount), kg: roundUpQuantity(amount * factor) };
+    return { liters: roundUpQuantity(amount / factor), kg: roundUpQuantity(amount) };
   };
 
   const handleSave = async () => {
@@ -59,9 +60,7 @@ const StockReceipts: React.FC = () => {
   };
 
   const formatNum = (value: number | null | undefined) => {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return '0.00';
-    const n = Number(value);
-    return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
+    return formatSignedQuantity(value);
   };
 
   const esc = (value: any) =>
@@ -193,9 +192,9 @@ const StockReceipts: React.FC = () => {
     },
     { key: 'fuel_type', title: 'Паливо' },
     { key: 'input_unit', title: 'Одиниця' },
-    { key: 'input_amount', title: 'Кількість', render: (r: any) => r.input_amount?.toFixed(2) },
-    { key: 'computed_liters', title: 'Літри', render: (r: any) => r.computed_liters?.toFixed(2) },
-    { key: 'computed_kg', title: 'Кг', render: (r: any) => r.computed_kg?.toFixed(2) },
+    { key: 'input_amount', title: 'Кількість', render: (r: any) => formatQuantity(r.input_amount) },
+    { key: 'computed_liters', title: 'Літри', render: (r: any) => formatQuantity(r.computed_liters) },
+    { key: 'computed_kg', title: 'Кг', render: (r: any) => formatQuantity(r.computed_kg) },
     { key: 'created_at', title: 'Дата', render: (r: any) => r.created_at ? new Date(r.created_at).toLocaleDateString('uk-UA') : '—' },
   ];
 

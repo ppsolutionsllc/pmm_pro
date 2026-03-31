@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { Printer } from 'lucide-react';
 import { api } from '../../api';
 import { ledgerRefTypeLabel } from '../../utils/humanLabels';
+import { formatSignedQuantity } from '../../utils/quantities';
 
 const StockLedger: React.FC = () => {
   const navigate = useNavigate();
@@ -31,9 +32,7 @@ const StockLedger: React.FC = () => {
   }, []);
 
   const formatNum = (value: number | null | undefined) => {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return '0.00';
-    const n = Number(value);
-    return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
+    return formatSignedQuantity(value);
   };
 
   const esc = (value: any) =>
@@ -134,8 +133,8 @@ const StockLedger: React.FC = () => {
   const columns = [
     { key: 'id', title: '№' },
     { key: 'fuel_type', title: 'Паливо' },
-    { key: 'delta_liters', title: 'Δ Літри', render: (r: any) => <span className={r.delta_liters >= 0 ? 'text-accent' : 'text-danger'}>{r.delta_liters >= 0 ? '+' : ''}{r.delta_liters?.toFixed(2)}</span> },
-    { key: 'delta_kg', title: 'Δ Кг', render: (r: any) => <span className={r.delta_kg >= 0 ? 'text-accent' : 'text-danger'}>{r.delta_kg >= 0 ? '+' : ''}{r.delta_kg?.toFixed(2)}</span> },
+    { key: 'delta_liters', title: 'Δ Літри', render: (r: any) => <span className={r.delta_liters >= 0 ? 'text-accent' : 'text-danger'}>{formatSignedQuantity(r.delta_liters)}</span> },
+    { key: 'delta_kg', title: 'Δ Кг', render: (r: any) => <span className={r.delta_kg >= 0 ? 'text-accent' : 'text-danger'}>{formatSignedQuantity(r.delta_kg)}</span> },
     { key: 'ref_type', title: 'Операція', render: (r: any) => ledgerRefTypeLabel(r.ref_type) },
     {
       key: 'ref_id',

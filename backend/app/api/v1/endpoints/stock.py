@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.schemas import stock as schema_stock
 from app.crud import stock as crud_stock
+from app.core.quantities import round_up_quantity, round_up_signed_quantity
 from app.models.posting_session import PostingOperation
 from app.models.request import Request
 from app.models.stock import StockAdjustment, StockBalance, StockLedger, StockReceipt
@@ -81,11 +82,11 @@ async def get_balance(
     rows = result.scalars().all()
     return [
         {
-            "id": r.id,
-            "fuel_type": r.fuel_type.value if r.fuel_type else None,
-            "balance_liters": r.balance_liters,
-            "balance_kg": r.balance_kg,
-        }
+                "id": r.id,
+                "fuel_type": r.fuel_type.value if r.fuel_type else None,
+                "balance_liters": float(round_up_quantity(r.balance_liters)),
+                "balance_kg": float(round_up_quantity(r.balance_kg)),
+            }
         for r in rows
     ]
 
@@ -137,8 +138,8 @@ async def list_ledger(
             lambda ref_type, ref_id: {
                 "id": r.id,
                 "fuel_type": r.fuel_type.value if r.fuel_type else None,
-                "delta_liters": r.delta_liters,
-                "delta_kg": r.delta_kg,
+                "delta_liters": float(round_up_signed_quantity(r.delta_liters)),
+                "delta_kg": float(round_up_signed_quantity(r.delta_kg)),
                 "ref_type": ref_type,
                 "ref_id": ref_id,
                 "ref_doc_type": (

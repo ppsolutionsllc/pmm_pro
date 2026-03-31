@@ -5,6 +5,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton';
 import DataTable from '../../components/DataTable';
 import { useToast } from '../../components/Toast';
 import { api } from '../../api';
+import { formatSignedQuantity } from '../../utils/quantities';
 
 const StockAdjustmentDetail: React.FC = () => {
   const { id } = useParams();
@@ -32,8 +33,8 @@ const StockAdjustmentDetail: React.FC = () => {
   const columns = [
     { key: 'id', title: '№ рядка' },
     { key: 'fuel_type', title: 'Паливо' },
-    { key: 'delta_liters', title: 'Δ Літри', render: (r: any) => Number(r.delta_liters || 0).toFixed(6) },
-    { key: 'delta_kg', title: 'Δ Кг', render: (r: any) => Number(r.delta_kg || 0).toFixed(2) },
+    { key: 'delta_liters', title: 'Δ Літри', render: (r: any) => formatSignedQuantity(r.delta_liters) },
+    { key: 'delta_kg', title: 'Δ Кг', render: (r: any) => formatSignedQuantity(r.delta_kg) },
     { key: 'request_id', title: 'Заявка', render: (r: any) => r.request_id || '—' },
     { key: 'comment', title: 'Коментар', render: (r: any) => r.comment || '—' },
   ];
