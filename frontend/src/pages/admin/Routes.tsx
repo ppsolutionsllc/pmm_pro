@@ -4,355 +4,462 @@ import DataTable from '../../components/DataTable';
 import Modal from '../../components/Modal';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { useToast } from '../../components/Toast';
-import { api } from '../../api';
-import { Plus, Search, ArrowUpDown } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 
-const AdminRoutes: React.FC = () => {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [routes, setRoutes] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [pendingChanges, setPendingChanges] = useState<any[]>([]);
+type Department = {
+  id: number;
+  name: string;
+};
 
-  const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
-  const [sortKey, setSortKey] = useState<'created_at' | 'name' | 'distance_km' | 'department'>('created_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+type RouteRow = {
+  id: number;
+  department_id: number;
+  name: string;
+  points: string[];
+  distance_km: number;
+  is_approved: boolean;
+};
 
-  const [diffOpen, setDiffOpen] = useState(false);
-  const [diffMode, setDiffMode] = useState<'new' | 'change'>('change');
-  const [diffTarget, setDiffTarget] = useState<any>(null);
+type ChangeRequestRow = {
+  id: number;
+  route_id: number;
+  department_id: number;
+  status: string;
+  name?: string | null;
+  points?: string[] | null;
+  distance_km?: number | null;
+  created_at?: string | null;
+};
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ department_id: '', name: '', pointsText: '', distance_km: '' });
+const API_BASE = '/api/v1';
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([
-      api.getDepartments(),
-      api.listRoutes({}),
-      api.listRouteChangeRequests({ status: 'PENDING' }),
-    ]).then(([d, r, ch]) => {
-      setDepartments(d || []);
-      setRoutes(r || []);
-      setPendingChanges(ch || []);
-    }).finally(() => setLoading(false));
-  };
+const getToken = (): string =>
+  sessionStorage.getItem('token')
+  || localStorage.getItem('token')
+  || '';
 
-  useEffect(() => { load(); }, []);
+const apiRequest = async <T,>(path: string, init?: RequestInit): Promise<T> => {
+  const headers = new Headers(init?.headers || {});
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (init?.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-  useEffect(() => {
-    const t = setInterval(load, 300000);
-    return () => clearInterval(t);
-  }, []);
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+  });
 
-  const deptName = (id: number) => departments.find((d: any) => d.id === id)?.name || `#${id}`;
+  if (!response.ok) {
+    let message = 'Помилка запиту';
+    try {
+      const data = await response.json();
+      message = data?.detail || data?.message || message;
+    } catch {
+      try {
+        message = await response.text();
+      } catch {}
+    }
+    throw new Error(message);
+  }
 
-  const pendingNewRoutes = useMemo(() => (routes || []).filter((r: any) => !r.is_approved), [routes]);
-  const approvedRoutes = useMemo(() => (routes || []).filter((r: any) => r.is_approved), [routes]);
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+};
 
-  const filteredSortedApprovedRoutes = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const arr = (approvedRoutes || []).filter((r: any) => {
-      if (deptFilter && String(r.department_id) !== String(deptFilter)) return false;
-      if (!q) return true;
-      const hay = `${r.name || ''} ${(r.points || []).join(' ')}`.toLowerCase();
-      return hay.includes(q);
-    });
-    const dir = sortDir === 'asc' ? 1 : -1;
-    arr.sort((a: any, b: any) => {
-      if (sortKey === 'department') return deptName(a.department_id).localeCompare(deptName(b.department_id)) * dir;
-      if (sortKey === 'name') return String(a.name || '').localeCompare(String(b.name || '')) * dir;
-      if (sortKey === 'distance_km') return ((a.distance_km ?? 0) - (b.distance_km ?? 0)) * dir;
-      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return (at - bt) * dir;
-    });
-    return arr;
-  }, [approvedRoutes, deptFilter, search, sortKey, sortDir, departments]);
-
-  const parsePoints = (txt: string) => txt
-    .split(/\r?\n|\s*—\s*|\s*-\s*/g)
-    .map(s => s.trim())
+const parsePoints = (value: string): string[] =>
+  value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
     .filter(Boolean);
 
-  const create = async () => {
-    setCreating(true);
+const formatPoints = (points: string[] | null | undefined): string =>
+  (points || []).join(' -> ');
+
+const RoutesAdminPage: React.FC = () => {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [routes, setRoutes] = useState<RouteRow[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequestRow[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    department_id: '',
+    name: '',
+    points_text: '',
+    distance_km: '',
+  });
+
+  const load = async () => {
+    setLoading(true);
     try {
-      await api.createRoute({
-        department_id: Number(form.department_id),
-        name: form.name,
-        points: parsePoints(form.pointsText),
-        distance_km: parseFloat(form.distance_km),
-      });
-      toast('Маршрут створено', 'success');
-      setCreateOpen(false);
-      setForm({ department_id: '', name: '', pointsText: '', distance_km: '' });
-      load();
+      const [routesData, departmentsData, changeRequestsData] = await Promise.all([
+        apiRequest<RouteRow[]>('/routes'),
+        apiRequest<Department[]>('/departments'),
+        apiRequest<ChangeRequestRow[]>('/route-change-requests?status=PENDING').catch(() => []),
+      ]);
+      setRoutes(routesData || []);
+      setDepartments(departmentsData || []);
+      setChangeRequests(changeRequestsData || []);
     } catch (e: any) {
-      toast(e.message, 'error');
+      toast(e.message || 'Не вдалося завантажити маршрути', 'error');
     } finally {
-      setCreating(false);
+      setLoading(false);
     }
   };
 
-  const approveNew = async (r: any) => {
-    try {
-      await api.approveRoute(r.id);
-      toast('Маршрут підтверджено', 'success');
-      load();
-    } catch (e: any) { toast(e.message, 'error'); }
+  useEffect(() => {
+    load();
+  }, []);
+
+  const resetForm = () => {
+    setEditingRouteId(null);
+    setForm({
+      department_id: '',
+      name: '',
+      points_text: '',
+      distance_km: '',
+    });
   };
 
-  const rejectNew = async (r: any) => {
-    try {
-      await api.rejectRoute(r.id);
-      toast('Маршрут відхилено', 'success');
-      load();
-    } catch (e: any) { toast(e.message, 'error'); }
+  const openCreate = () => {
+    resetForm();
+    setModalOpen(true);
   };
 
-  const approveChange = async (c: any) => {
-    try {
-      await api.approveRouteChangeRequest(c.id);
-      toast('Зміни застосовано', 'success');
-      load();
-    } catch (e: any) { toast(e.message, 'error'); }
+  const openEdit = (row: RouteRow) => {
+    setEditingRouteId(row.id);
+    setForm({
+      department_id: String(row.department_id),
+      name: row.name || '',
+      points_text: (row.points || []).join('\n'),
+      distance_km: String(row.distance_km ?? ''),
+    });
+    setModalOpen(true);
   };
 
-  const rejectChange = async (c: any) => {
-    try {
-      await api.rejectRouteChangeRequest(c.id);
-      toast('Зміни відхилено', 'success');
-      load();
-    } catch (e: any) { toast(e.message, 'error'); }
-  };
-
-  const openDiffNew = (r: any) => {
-    setDiffMode('new');
-    setDiffTarget(r);
-    setDiffOpen(true);
-  };
-
-  const openDiffChange = (c: any) => {
-    setDiffMode('change');
-    setDiffTarget(c);
-    setDiffOpen(true);
-  };
-
-  const diffRoute = useMemo(() => {
-    if (!diffTarget) return null;
-    if (diffMode === 'new') return null;
-    return routes.find((r: any) => r.id === diffTarget.route_id) || null;
-  }, [diffTarget, diffMode, routes]);
-
-  const diffRows = useMemo(() => {
-    if (!diffTarget) return [] as Array<{ field: string; oldVal: any; newVal: any }>;
-
-    const rows: Array<{ field: string; oldVal: any; newVal: any }> = [];
-    const add = (field: string, oldVal: any, newVal: any) => {
-      const o = oldVal ?? null;
-      const n = newVal ?? null;
-      if (n === null) return;
-      if (String(o ?? '') === String(n ?? '')) return;
-      rows.push({ field, oldVal: o, newVal: n });
-    };
-
-    if (diffMode === 'new') {
-      add('Назва', null, diffTarget.name);
-      add('Точки', null, (diffTarget.points || []).join(' — '));
-      add('Плече підвезення', null, diffTarget.distance_km);
-      return rows;
+  const saveRoute = async () => {
+    const departmentId = Number(form.department_id || 0);
+    const distanceKm = Number(form.distance_km || 0);
+    const points = parsePoints(form.points_text);
+    if (!departmentId) {
+      toast('Оберіть підрозділ', 'warning');
+      return;
+    }
+    if (!form.name.trim()) {
+      toast('Вкажіть назву маршруту', 'warning');
+      return;
+    }
+    if (!points.length) {
+      toast('Додайте хоча б одну точку маршруту', 'warning');
+      return;
+    }
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+      toast('Вкажіть коректну відстань', 'warning');
+      return;
     }
 
-    if (!diffRoute) return rows;
-    add('Назва', diffRoute.name, diffTarget.name);
-    add('Точки', (diffRoute.points || []).join(' — '), diffTarget.points ? (diffTarget.points || []).join(' — ') : null);
-    add('Плече підвезення', diffRoute.distance_km, diffTarget.distance_km);
-    return rows;
-  }, [diffTarget, diffMode, diffRoute]);
+    setSaving(true);
+    try {
+      const payload = {
+        department_id: departmentId,
+        name: form.name.trim(),
+        points,
+        distance_km: distanceKm,
+      };
+      if (editingRouteId) {
+        await apiRequest<RouteRow>(`/routes/${editingRouteId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        toast('Маршрут оновлено', 'success');
+      } else {
+        await apiRequest<RouteRow>('/routes', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        toast('Маршрут створено', 'success');
+      }
+      setModalOpen(false);
+      resetForm();
+      await load();
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося зберегти маршрут', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const columns = [
+  const setApproval = async (routeId: number, approve: boolean) => {
+    try {
+      await apiRequest<RouteRow>(`/routes/${routeId}/${approve ? 'approve' : 'reject'}`, {
+        method: 'POST',
+      });
+      toast(approve ? 'Маршрут погоджено' : 'Маршрут відхилено', 'success');
+      await load();
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося змінити статус маршруту', 'error');
+    }
+  };
+
+  const decideChangeRequest = async (requestId: number, approve: boolean) => {
+    try {
+      await apiRequest<ChangeRequestRow>(`/route-change-requests/${requestId}/${approve ? 'approve' : 'reject'}`, {
+        method: 'POST',
+      });
+      toast(approve ? 'Запит на зміну погоджено' : 'Запит на зміну відхилено', 'success');
+      await load();
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося обробити запит на зміну', 'error');
+    }
+  };
+
+  const deleteRoute = async (row: RouteRow) => {
+    const confirmed = window.confirm(`Видалити маршрут "${row.name}"?`);
+    if (!confirmed) return;
+
+    try {
+      await apiRequest<{ ok: boolean }>(`/routes/${row.id}`, {
+        method: 'DELETE',
+      });
+      toast('Маршрут видалено', 'success');
+      await load();
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося видалити маршрут', 'error');
+    }
+  };
+
+  const departmentMap = useMemo(
+    () => Object.fromEntries(departments.map((d) => [d.id, d.name])),
+    [departments],
+  );
+
+  const routeColumns = [
     { key: 'id', title: 'ID' },
-    { key: 'department_id', title: 'Підрозділ', render: (r: any) => deptName(r.department_id) },
+    {
+      key: 'department_id',
+      title: 'Підрозділ',
+      render: (row: RouteRow) => departmentMap[row.department_id] || `#${row.department_id}`,
+    },
     { key: 'name', title: 'Назва' },
-    { key: 'points', title: 'Точки', render: (r: any) => (r.points || []).join(' — ') || '—' },
-    { key: 'distance_km', title: 'Плече підвезення', render: (r: any) => r.distance_km ?? '—' },
-    { key: 'is_approved', title: 'Статус', render: (r: any) => (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${r.is_approved ? 'bg-accent/20 text-accent' : 'bg-warn/20 text-warn'}`}>
-        {r.is_approved ? 'Підтверджено' : 'Очікує'}
-      </span>
-    ) },
+    {
+      key: 'points',
+      title: 'Точки',
+      render: (row: RouteRow) => formatPoints(row.points),
+    },
+    {
+      key: 'distance_km',
+      title: 'Відстань, км',
+      render: (row: RouteRow) => row.distance_km,
+    },
+    {
+      key: 'is_approved',
+      title: 'Статус',
+      render: (row: RouteRow) => (
+        <span className={row.is_approved ? 'text-accent' : 'text-warn'}>
+          {row.is_approved ? 'Погоджено' : 'Очікує / відхилено'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      title: 'Дії',
+      render: (row: RouteRow) => (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-secondary !py-1 !px-3"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+          >
+            <Pencil size={14} /> Редагувати
+          </button>
+          {!row.is_approved && (
+            <button
+              type="button"
+              className="btn-primary !py-1 !px-3"
+              onClick={(e) => {
+                e.stopPropagation();
+                setApproval(row.id, true);
+              }}
+            >
+              <Check size={14} /> Погодити
+            </button>
+          )}
+          {row.is_approved && (
+            <button
+              type="button"
+              className="btn-danger !py-1 !px-3"
+              onClick={(e) => {
+                e.stopPropagation();
+                setApproval(row.id, false);
+              }}
+            >
+              <X size={14} /> Відхилити
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn-danger !py-1 !px-3"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteRoute(row);
+            }}
+          >
+            <Trash2 size={14} /> Видалити
+          </button>
+        </div>
+      ),
+    },
   ];
+
+  const changeRequestColumns = [
+    { key: 'id', title: 'ID' },
+    { key: 'route_id', title: 'Маршрут' },
+    {
+      key: 'department_id',
+      title: 'Підрозділ',
+      render: (row: ChangeRequestRow) => departmentMap[row.department_id] || `#${row.department_id}`,
+    },
+    { key: 'name', title: 'Нова назва', render: (row: ChangeRequestRow) => row.name || '—' },
+    {
+      key: 'points',
+      title: 'Нові точки',
+      render: (row: ChangeRequestRow) => formatPoints(row.points || []),
+    },
+    {
+      key: 'distance_km',
+      title: 'Нова відстань, км',
+      render: (row: ChangeRequestRow) => row.distance_km ?? '—',
+    },
+    {
+      key: 'actions',
+      title: 'Дії',
+      render: (row: ChangeRequestRow) => (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-primary !py-1 !px-3"
+            onClick={() => decideChangeRequest(row.id, true)}
+          >
+            <Check size={14} /> Погодити
+          </button>
+          <button
+            type="button"
+            className="btn-danger !py-1 !px-3"
+            onClick={() => decideChangeRequest(row.id, false)}
+          >
+            <X size={14} /> Відхилити
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  if (loading) return <LoadingSkeleton rows={6} />;
 
   return (
     <div>
       <PageHeader
         title="Маршрути"
-        subtitle="Довідник маршрутів"
+        subtitle="Довідник маршрутів і запити на зміни"
         actions={
           <div className="flex gap-2">
-            <button onClick={load} className="btn-secondary">Оновити</button>
-            <button onClick={() => setCreateOpen(true)} className="btn-primary"><Plus size={16} /> Додати</button>
+            <button className="btn-secondary" onClick={load}>Оновити</button>
+            <button className="btn-primary" onClick={openCreate}>
+              <Plus size={16} /> Новий маршрут
+            </button>
           </div>
         }
       />
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            className="input-field pl-9"
-            placeholder="Пошук по назві або точках..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Маршрути</h3>
+          <DataTable columns={routeColumns} data={routes} emptyText="Маршрутів немає" />
         </div>
-        <select className="input-field w-auto" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-          <option value="">Всі підрозділи</option>
-          {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <select className="input-field w-auto" value={sortKey} onChange={e => setSortKey(e.target.value as any)}>
-          <option value="created_at">Сортування: дата</option>
-          <option value="department">Сортування: підрозділ</option>
-          <option value="name">Сортування: назва</option>
-          <option value="distance_km">Сортування: плече підвезення</option>
-        </select>
-        <button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className="btn-secondary">
-          <ArrowUpDown size={16} /> {sortDir === 'asc' ? '↑' : '↓'}
-        </button>
+
+        <div>
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Запити на зміни</h3>
+          <DataTable columns={changeRequestColumns} data={changeRequests} emptyText="Запитів на зміни немає" />
+        </div>
       </div>
 
-      {pendingNewRoutes.length > 0 && (
-        <div className="card mb-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">Нові маршрути на підтвердження ({pendingNewRoutes.length})</h3>
-          <DataTable
-            columns={[
-              { key: 'id', title: 'ID' },
-              { key: 'department_id', title: 'Підрозділ', render: (r: any) => deptName(r.department_id) },
-              { key: 'name', title: 'Назва' },
-              { key: 'points', title: 'Точки', render: (r: any) => (r.points || []).join(' — ') || '—' },
-              { key: 'distance_km', title: 'Плече підвезення', render: (r: any) => r.distance_km ?? '—' },
-              { key: 'actions', title: '', render: (r: any) => (
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => openDiffNew(r)} className="btn-ghost text-xs">Деталі</button>
-                  <button onClick={() => approveNew(r)} className="btn-primary text-xs">Підтвердити</button>
-                  <button onClick={() => rejectNew(r)} className="btn-secondary text-xs">Відхилити</button>
-                </div>
-              ) },
-            ]}
-            data={pendingNewRoutes}
-            emptyText="Немає"
-          />
-        </div>
-      )}
-
-      {pendingChanges.length > 0 && (
-        <div className="card mb-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">Зміни маршрутів на підтвердження ({pendingChanges.length})</h3>
-          <DataTable
-            columns={[
-              { key: 'id', title: 'ID' },
-              { key: 'route_id', title: 'Маршрут ID' },
-              { key: 'department_id', title: 'Підрозділ', render: (r: any) => deptName(r.department_id) },
-              { key: 'name', title: 'Назва', render: (r: any) => r.name || '—' },
-              { key: 'points', title: 'Точки', render: (r: any) => (r.points || []).join(' — ') || '—' },
-              { key: 'distance_km', title: 'Плече підвезення', render: (r: any) => r.distance_km ?? '—' },
-              { key: 'actions', title: '', render: (r: any) => (
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => openDiffChange(r)} className="btn-ghost text-xs">Деталі</button>
-                  <button onClick={() => approveChange(r)} className="btn-primary text-xs">Підтвердити</button>
-                  <button onClick={() => rejectChange(r)} className="btn-secondary text-xs">Відхилити</button>
-                </div>
-              ) },
-            ]}
-            data={pendingChanges}
-            emptyText="Немає"
-          />
-        </div>
-      )}
-
-      {loading ? <LoadingSkeleton /> : (
-        <DataTable columns={columns} data={filteredSortedApprovedRoutes} emptyText="Маршрутів немає" />
-      )}
-
       <Modal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Новий маршрут"
-        size="sm"
-        footer={
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          resetForm();
+        }}
+        title={editingRouteId ? 'Редагувати маршрут' : 'Створити маршрут'}
+        size="lg"
+        footer={(
           <>
-            <button onClick={() => setCreateOpen(false)} className="btn-secondary">Скасувати</button>
-            <button onClick={create} className="btn-primary" disabled={creating || !form.department_id || !form.name}>
-              {creating ? 'Створення...' : 'Створити'}
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setModalOpen(false);
+                resetForm();
+              }}
+            >
+              Скасувати
+            </button>
+            <button className="btn-primary" onClick={saveRoute} disabled={saving}>
+              {saving ? 'Збереження...' : 'Зберегти'}
             </button>
           </>
-        }
+        )}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Підрозділ *</label>
-            <select className="input-field" value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value })}>
-              <option value="">Оберіть...</option>
-              {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            <label className="block text-sm font-medium text-gray-400 mb-1">Підрозділ</label>
+            <select
+              className="input-field"
+              value={form.department_id}
+              onChange={(e) => setForm((prev) => ({ ...prev, department_id: e.target.value }))}
+            >
+              <option value="">Оберіть підрозділ</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Назва *</label>
-            <input className="input-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Плече підвезення *</label>
-            <input className="input-field" type="number" step="0.1" value={form.distance_km} onChange={e => setForm({ ...form, distance_km: e.target.value })} />
+            <label className="block text-sm font-medium text-gray-400 mb-1">Назва маршруту</label>
+            <input
+              className="input-field"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Точки маршруту</label>
             <textarea
-              className="input-field min-h-[110px]"
-              value={form.pointsText}
-              onChange={e => setForm({ ...form, pointsText: e.target.value })}
-              placeholder="Кожна точка з нового рядка або через тире"
+              className="input-field min-h-32"
+              value={form.points_text}
+              onChange={(e) => setForm((prev) => ({ ...prev, points_text: e.target.value }))}
+              placeholder={'Кожну точку вкажіть з нового рядка'}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Відстань, км</label>
+            <input
+              type="number"
+              step="0.1"
+              className="input-field"
+              value={form.distance_km}
+              onChange={(e) => setForm((prev) => ({ ...prev, distance_km: e.target.value }))}
             />
           </div>
         </div>
-      </Modal>
-
-      <Modal
-        open={diffOpen}
-        onClose={() => { setDiffOpen(false); setDiffTarget(null); }}
-        title="Зміни маршруту"
-        size="sm"
-        footer={<button onClick={() => { setDiffOpen(false); setDiffTarget(null); }} className="btn-primary">Закрити</button>}
-      >
-        {!diffTarget ? (
-          <div className="text-sm text-gray-500">Немає даних для порівняння</div>
-        ) : diffMode === 'change' && !diffRoute ? (
-          <div className="text-sm text-gray-500">Не знайдено поточний маршрут для порівняння</div>
-        ) : diffRows.length === 0 ? (
-          <div className="text-sm text-gray-500">Заявка не містить змін</div>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-500">
-              <div>Поле</div>
-              <div>Було</div>
-              <div>Стало</div>
-            </div>
-            <div className="space-y-2">
-              {diffRows.map((row) => (
-                <div key={row.field} className="grid grid-cols-3 gap-2 items-start">
-                  <div className="text-sm text-gray-300">{row.field}</div>
-                  <div className="text-sm text-gray-500 break-words">{row.oldVal === null || row.oldVal === '' ? '—' : String(row.oldVal)}</div>
-                  <div className="text-sm text-accent break-words">{row.newVal === null || row.newVal === '' ? '—' : String(row.newVal)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   );
 };
 
-export default AdminRoutes;
+export default RoutesAdminPage;

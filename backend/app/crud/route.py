@@ -2,7 +2,8 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+from sqlalchemy import delete, update
+from sqlalchemy.exc import IntegrityError
 
 from app.core.time import utcnow
 from app.models.route import Route, RouteChangeRequest, RouteChangeStatus
@@ -128,3 +129,18 @@ async def apply_change_to_route(db: AsyncSession, *, route_id: int, name: str | 
         await db.execute(update(Route).where(Route.id == route_id).values(**vals))
         await db.commit()
     return await get_route(db, route_id)
+
+
+async def delete_route(db: AsyncSession, *, route_id: int):
+    route = await get_route(db, route_id)
+    if not route:
+        return None
+
+    await db.execute(delete(RouteChangeRequest).where(RouteChangeRequest.route_id == route_id))
+    await db.delete(route)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise
+    return route

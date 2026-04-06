@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import deps
@@ -79,6 +80,37 @@ async def create_route(
     return _route_out(obj)
 
 
+@router.put("/routes/{rid}", response_model=schema_route.RouteOut)
+async def update_route(
+    rid: int,
+    data: schema_route.RouteUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    route = await crud_route.get_route(db, rid)
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    payload = data.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    if "department_id" in payload and payload["department_id"] is not None:
+        route.department_id = int(payload["department_id"])
+    if "name" in payload and payload["name"] is not None:
+        route.name = str(payload["name"]).strip()
+    if "points" in payload and payload["points"] is not None:
+        points = [str(p).strip() for p in payload["points"] if str(p).strip()]
+        route.points_json = json.dumps(points, ensure_ascii=False)
+    if "distance_km" in payload and payload["distance_km"] is not None:
+        route.distance_km = float(payload["distance_km"])
+
+    db.add(route)
+    await db.commit()
+    await db.refresh(route)
+    return _route_out(route)
+
+
 @router.post("/routes/{rid}/approve", response_model=schema_route.RouteOut)
 async def approve_route(
     rid: int,
@@ -103,6 +135,27 @@ async def reject_route(
         raise HTTPException(status_code=404, detail="Route not found")
     updated = await crud_route.set_route_approved(db, route_id=rid, is_approved=False)
     return _route_out(updated)
+
+
+@router.delete("/routes/{rid}")
+async def delete_route(
+    rid: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    route = await crud_route.get_route(db, rid)
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    try:
+        await crud_route.delete_route(db, route_id=rid)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="Маршрут не можна видалити, бо він уже використовується в заявках",
+        )
+
+    return {"ok": True}
 
 
 @router.post("/routes/{rid}/change-requests", response_model=schema_route.RouteChangeRequestOut)

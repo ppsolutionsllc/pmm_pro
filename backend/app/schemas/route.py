@@ -11,6 +11,13 @@ class RouteCreate(BaseModel):
     distance_km: float
 
 
+class RouteUpdate(BaseModel):
+    department_id: Optional[int] = None
+    name: Optional[str] = None
+    points: Optional[List[str]] = None
+    distance_km: Optional[float] = None
+
+
 class RouteOut(BaseModel):
     id: int
     department_id: int
