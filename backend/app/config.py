@@ -1,7 +1,7 @@
 import json
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -104,6 +104,20 @@ class Settings(BaseSettings):
                     pass
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    @model_validator(mode="after")
+    def apply_public_url_defaults(self):
+        frontend_origin = str(self.frontend_base_url or "").strip()
+        if frontend_origin:
+            parsed = urlparse(frontend_origin)
+            origin = ""
+            if parsed.scheme and parsed.netloc:
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                origin = frontend_origin.rstrip("/")
+            if origin and origin not in self.cors_origins:
+                self.cors_origins = [*self.cors_origins, origin]
+        return self
 
     @field_validator("allowed_hosts", mode="before")
     @classmethod

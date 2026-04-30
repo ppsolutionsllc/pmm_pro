@@ -31,6 +31,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def needs_password_rehash(hashed_password: str) -> bool:
+    token = str(hashed_password or "")
+    if not token:
+        return False
+    if _looks_like_bcrypt_hash(token):
+        return True
+    try:
+        return bool(pwd_context.needs_update(token))
+    except Exception:
+        return False
+
+
 def get_password_hash(password: str) -> str:
     # bcrypt has a maximum password length of 72 bytes. If a longer string
     # slips through (for example due to an unexpected env var), passlib will

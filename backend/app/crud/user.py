@@ -4,7 +4,7 @@ from sqlalchemy import delete, update
 from sqlalchemy import func
 
 from app.models.user import User
-from app.core.security import get_password_hash, verify_password
+from app.core.security import get_password_hash, verify_password, needs_password_rehash
 from app.schemas.user import UserCreate, RoleEnum
 
 async def get_user_by_login(db: AsyncSession, login: str):
@@ -39,6 +39,11 @@ async def authenticate(db: AsyncSession, login: str, password: str):
     user = await get_user_by_login(db, login)
     if not user or not verify_password(password, user.hashed_password):
         return None
+    if needs_password_rehash(user.hashed_password):
+        user.hashed_password = get_password_hash(password)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
     return user
 
 async def update_user(db: AsyncSession, user_id: int, **kwargs):

@@ -172,6 +172,18 @@ make prod-backup
 - Якщо змінюються Python або Node dependencies, потрібен rebuild image
 - `frontend_node_modules` — dev-only volume; його можна безпечно видаляти при проблемах з локальним frontend
 - update subsystem у production залишився окремою production-функцією і не тягнеться в dev workflow
+- `ALLOWED_HOSTS` і `CORS_ORIGINS` тепер можуть бути порожніми: backend автоматично підхопить значення з `FRONTEND_BASE_URL`, а trusted hosts також доповняться internal hostnames
+- після production deploy можна запускати перевірку:
+
+```bash
+./scripts/prod-post-deploy-check.sh <compose-project-name> docker-compose.prod.yml
+```
+
+- приклад для Dokploy:
+
+```bash
+./scripts/prod-post-deploy-check.sh palevo-palevo-12toe9 docker-compose.prod.yml
+```
 
 ## Міграція зі старих Docker volumes
 
