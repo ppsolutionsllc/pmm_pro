@@ -159,6 +159,17 @@ def _trusted_hosts_with_internal_defaults(values: list[str]) -> list[str]:
             cleaned.append(host)
     if "*" in cleaned:
         return ["*"]
+    for public_url in (
+        settings.frontend_base_url,
+        settings.print_qr_target_url,
+    ):
+        host = _normalize_host(str(public_url or ""))
+        if host and host not in cleaned:
+            cleaned.append(host)
+        if ":" in host:
+            hostname = host.split(":", 1)[0].strip()
+            if hostname and hostname not in cleaned:
+                cleaned.append(hostname)
     for internal in (
         "127.0.0.1",
         "127.0.0.1:8000",
