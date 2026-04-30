@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { useToast } from '../../components/Toast';
+import Modal from '../../components/Modal';
 import { api } from '../../api';
 import {
   incidentSeverityLabel,
@@ -417,10 +418,15 @@ function BackupRestore() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [creatingFull, setCreatingFull] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingFull, setUploadingFull] = useState(false);
   const [uploadingAndRestoring, setUploadingAndRestoring] = useState(false);
+  const [uploadingAndRestoringFull, setUploadingAndRestoringFull] = useState(false);
   const [backups, setBackups] = useState<any[]>([]);
+  const [fullBackups, setFullBackups] = useState<any[]>([]);
   const [selectedDump, setSelectedDump] = useState<File | null>(null);
+  const [selectedFullArchive, setSelectedFullArchive] = useState<File | null>(null);
   const [config, setConfig] = useState({
     schedule_enabled: false,
     schedule_interval_hours: 24,
@@ -430,16 +436,27 @@ function BackupRestore() {
   });
   const [savingConfig, setSavingConfig] = useState(false);
   const [restoringFile, setRestoringFile] = useState<string | null>(null);
+  const [restoringFullFile, setRestoringFullFile] = useState<string | null>(null);
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const [deletingFullFile, setDeletingFullFile] = useState<string | null>(null);
+  const [creatingPreRestoreFullBackup, setCreatingPreRestoreFullBackup] = useState(false);
+  const [fullRestoreModal, setFullRestoreModal] = useState<{
+    open: boolean;
+    source: 'stored' | 'upload';
+    archive: any | null;
+  }>({ open: false, source: 'stored', archive: null });
+  const [fullRestoreConfirm, setFullRestoreConfirm] = useState('');
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [rows, cfg]: any = await Promise.all([
+      const [rows, fullRows, cfg]: any = await Promise.all([
         api.listDbBackups(),
+        api.listFullBackups().catch(() => []),
         api.getDbBackupConfig().catch(() => null),
       ]);
       setBackups(rows || []);
+      setFullBackups(fullRows || []);
       if (cfg) {
         setConfig({
           schedule_enabled: Boolean(cfg.schedule_enabled),
@@ -451,6 +468,7 @@ function BackupRestore() {
       }
     } catch {
       setBackups([]);
+      setFullBackups([]);
     } finally {
       setLoading(false);
     }
@@ -459,6 +477,79 @@ function BackupRestore() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const fullRestoreWarning =
+    'Повне відновлення перезапише поточну базу даних, артефакти друку та системні логи на цьому сервері.';
+
+  const openFullRestoreModal = (source: 'stored' | 'upload', archive: any | null) => {
+    setFullRestoreConfirm('');
+    setFullRestoreModal({ open: true, source, archive });
+  };
+
+  const closeFullRestoreModal = () => {
+    setFullRestoreModal({ open: false, source: 'stored', archive: null });
+    setFullRestoreConfirm('');
+  };
+
+  const confirmFullRestore = async () => {
+    if (fullRestoreConfirm.trim().toUpperCase() !== 'RESTORE') {
+      toast('Для підтвердження введіть RESTORE', 'warning');
+      return;
+    }
+
+    if (fullRestoreModal.source === 'upload') {
+      if (!selectedFullArchive) {
+        toast('Архів не вибрано', 'error');
+        return;
+      }
+      setUploadingAndRestoringFull(true);
+      try {
+        await api.uploadAndRestoreFullBackup(selectedFullArchive, 'RESTORE');
+        toast('Повний бекап завантажено та відновлено. Рекомендується перезайти в систему.', 'success');
+        setSelectedFullArchive(null);
+        closeFullRestoreModal();
+        await loadAll();
+      } catch (e: any) {
+        toast(e.message || 'Помилка повного відновлення', 'error');
+      } finally {
+        setUploadingAndRestoringFull(false);
+      }
+      return;
+    }
+
+    const filename = String(fullRestoreModal.archive?.filename || '');
+    if (!filename) {
+      toast('Архів не знайдено', 'error');
+      return;
+    }
+    setRestoringFullFile(filename);
+    try {
+      await api.restoreFullBackup(filename, 'RESTORE');
+      toast('Повне відновлення завершено. Рекомендується перезайти в систему.', 'success');
+      closeFullRestoreModal();
+      await loadAll();
+    } catch (e: any) {
+      toast(e.message || 'Помилка повного відновлення', 'error');
+    } finally {
+      setRestoringFullFile(null);
+    }
+  };
+
+  const createPreRestoreBackup = async () => {
+    setCreatingPreRestoreFullBackup(true);
+    try {
+      const result: any = await api.createFullBackup();
+      toast(
+        `Створено страховий full backup${result?.filename ? `: ${result.filename}` : ''}`,
+        'success',
+      );
+      await loadAll();
+    } catch (e: any) {
+      toast(e.message || 'Не вдалося створити страховий full backup', 'error');
+    } finally {
+      setCreatingPreRestoreFullBackup(false);
+    }
+  };
 
   return (
     <div className="mt-8">
@@ -482,6 +573,76 @@ function BackupRestore() {
         >
           {creating ? 'Створення...' : 'Створити бекап (pg_dump)'}
         </button>
+        <button
+          onClick={async () => {
+            setCreatingFull(true);
+            try {
+              await api.createFullBackup();
+              toast('Повний бекап створено', 'success');
+              await loadAll();
+            } catch (e: any) {
+              toast(e.message || 'Помилка створення повного бекапу', 'error');
+            } finally {
+              setCreatingFull(false);
+            }
+          }}
+          className="btn-secondary"
+          disabled={creatingFull}
+        >
+          {creatingFull ? 'Створення...' : 'Створити повний бекап'}
+        </button>
+      </div>
+
+      <div className="card mb-4 space-y-3">
+        <div className="font-medium">Повний архів системи</div>
+        <div className="text-xs text-gray-500">
+          Один `.tar.gz` архів містить базу даних, артефакти та системні логи. Це рекомендований варіант для переносу на інший сервер.
+        </div>
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          Увага: повне відновлення є руйнівною операцією. Воно замінює поточну БД, файли артефактів і системні логи даними з архіву.
+        </div>
+        <input
+          type="file"
+          accept=".tar.gz,application/gzip,application/x-gzip,.tgz"
+          onChange={(e) => setSelectedFullArchive(e.target.files?.[0] || null)}
+          className="input-field"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn-secondary"
+            disabled={!selectedFullArchive || uploadingFull}
+            onClick={async () => {
+              if (!selectedFullArchive) return;
+              setUploadingFull(true);
+              try {
+                await api.uploadFullBackup(selectedFullArchive);
+                toast('Повний бекап завантажено', 'success');
+                setSelectedFullArchive(null);
+                await loadAll();
+              } catch (e: any) {
+                toast(e.message || 'Помилка завантаження повного бекапу', 'error');
+              } finally {
+                setUploadingFull(false);
+              }
+            }}
+          >
+            {uploadingFull ? 'Завантаження...' : 'Завантажити повний бекап'}
+          </button>
+          <button
+            className="btn-danger"
+            disabled={!selectedFullArchive || uploadingAndRestoringFull}
+            onClick={async () => {
+              if (!selectedFullArchive) return;
+              openFullRestoreModal('upload', {
+                filename: selectedFullArchive.name,
+                size: selectedFullArchive.size,
+                manifest: null,
+              });
+            }}
+          >
+            {uploadingAndRestoringFull ? 'Відновлення...' : 'Завантажити та повністю відновити'}
+          </button>
+        </div>
       </div>
 
       <div className="card mb-4 space-y-3">
@@ -626,6 +787,128 @@ function BackupRestore() {
       </div>
 
       <div className="mt-4 overflow-x-auto">
+        <div className="font-medium mb-2">Повні бекапи</div>
+        <table className="min-w-full text-sm mb-6">
+          <thead>
+            <tr className="text-left text-gray-400 border-b border-mil-700">
+              <th className="py-2 pr-4">Файл</th>
+              <th className="py-2 pr-4">Розмір</th>
+              <th className="py-2 pr-4">Маніфест</th>
+              <th className="py-2 pr-4">Версії</th>
+              <th className="py-2 pr-4">Створено</th>
+              <th className="py-2 pr-4">Дії</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fullBackups.map((b: any) => (
+              <tr key={b.filename} className="border-b border-mil-800">
+                <td className="py-2 pr-4">
+                  <div>{b.filename}</div>
+                  <div className="text-xs text-gray-500">
+                    {(b.manifest?.includes || ['database.dump', 'artifacts.tar.gz', 'logs.tar.gz']).join(' + ')}
+                  </div>
+                </td>
+                <td className="py-2 pr-4">{(Number(b.size || 0) / 1024 / 1024).toFixed(2)} MB</td>
+                <td className="py-2 pr-4">
+                  {b.manifest ? (
+                    <div>
+                      <div>v{b.manifest.manifest_version || '—'}</div>
+                      <div className="text-xs text-gray-500">{b.manifest.backup_type || 'full'}</div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-red-400">{b.manifest_error || 'Немає manifest'}</div>
+                  )}
+                </td>
+                <td className="py-2 pr-4">
+                  {b.manifest ? (
+                    <div className="text-xs">
+                      <div>BE: {b.manifest.backend_version || '—'}</div>
+                      <div>FE: {b.manifest.frontend_version || '—'}</div>
+                    </div>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="py-2 pr-4">{b.created_at ? new Date(b.created_at).toLocaleString('uk-UA') : '—'}</td>
+                <td className="py-2 pr-4 flex gap-2 flex-wrap">
+                  <button
+                    className="btn-secondary !py-1"
+                    onClick={async () => {
+                      try {
+                        const r: any = await api.verifyFullBackup(b.filename);
+                        toast(
+                          r.ok
+                            ? `Повний бекап валідний${r.manifest?.backend_version ? ` (BE ${r.manifest.backend_version}, FE ${r.manifest?.frontend_version || '—'})` : ''}`
+                            : `Перевірка: ${r.reason || 'помилка'}`,
+                          r.ok ? 'success' : 'error',
+                        );
+                      } catch (e: any) {
+                        toast(e.message || 'Помилка перевірки', 'error');
+                      }
+                    }}
+                  >
+                    Перевірити
+                  </button>
+                  <button
+                    className="btn-secondary !py-1"
+                    onClick={async () => {
+                      try {
+                        const blob = await api.downloadFullBackup(b.filename);
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = b.filename;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch (e: any) {
+                        toast(e.message || 'Помилка завантаження', 'error');
+                      }
+                    }}
+                  >
+                    Завантажити
+                  </button>
+                  <button
+                    className="btn-secondary !py-1"
+                    disabled={restoringFullFile === b.filename}
+                    onClick={async () => {
+                      openFullRestoreModal('stored', b);
+                    }}
+                  >
+                    {restoringFullFile === b.filename ? 'Відновлення...' : 'Повністю відновити'}
+                  </button>
+                  <button
+                    className="btn-danger !py-1"
+                    disabled={deletingFullFile === b.filename}
+                    onClick={async () => {
+                      if (!window.confirm(`Видалити повний бекап ${b.filename}?`)) return;
+                      setDeletingFullFile(b.filename);
+                      try {
+                        await api.deleteFullBackup(b.filename);
+                        toast('Повний бекап видалено', 'success');
+                        await loadAll();
+                      } catch (e: any) {
+                        toast(e.message || 'Помилка видалення', 'error');
+                      } finally {
+                        setDeletingFullFile(null);
+                      }
+                    }}
+                  >
+                    {deletingFullFile === b.filename ? 'Видалення...' : 'Видалити'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {fullBackups.length === 0 && (
+              <tr>
+                <td className="py-2 text-gray-500" colSpan={6}>
+                  {loading ? 'Завантаження...' : 'Немає повних бекапів'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <div className="font-medium mb-2">Бекапи бази даних</div>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 border-b border-mil-700">
@@ -728,6 +1011,119 @@ function BackupRestore() {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        open={fullRestoreModal.open}
+        onClose={() => {
+          if (uploadingAndRestoringFull || restoringFullFile) return;
+          closeFullRestoreModal();
+        }}
+        title="Підтвердження повного відновлення"
+        size="lg"
+        footer={
+          <>
+            <button
+              className="btn-secondary"
+              onClick={closeFullRestoreModal}
+              disabled={uploadingAndRestoringFull || Boolean(restoringFullFile) || creatingPreRestoreFullBackup}
+            >
+              Скасувати
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={createPreRestoreBackup}
+              disabled={uploadingAndRestoringFull || Boolean(restoringFullFile) || creatingPreRestoreFullBackup}
+            >
+              {creatingPreRestoreFullBackup ? 'Створення backup...' : 'Створити full backup перед restore'}
+            </button>
+            <button
+              className="btn-danger"
+              onClick={confirmFullRestore}
+              disabled={
+                fullRestoreConfirm.trim().toUpperCase() !== 'RESTORE' ||
+                uploadingAndRestoringFull ||
+                Boolean(restoringFullFile) ||
+                creatingPreRestoreFullBackup
+              }
+            >
+              {uploadingAndRestoringFull || restoringFullFile ? 'Відновлення...' : 'Повністю відновити'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {fullRestoreWarning}
+          </div>
+
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
+            <div className="text-sm font-semibold text-red-200 mb-2">Буде замінено на поточному сервері</div>
+            <ul className="list-disc pl-5 space-y-1 text-sm text-red-100">
+              <li>поточна база даних PostgreSQL</li>
+              <li>усі друковані артефакти та службові файли в `artifacts`</li>
+              <li>системні логи, що входять до runtime-каталогу</li>
+            </ul>
+            <div className="mt-2 text-xs text-red-200/90">
+              Якщо потрібен відкат назад, спочатку створіть новий повний бекап поточного стану.
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-mil-700/70 bg-black/20 px-4 py-3">
+              <div className="text-xs text-gray-500 mb-1">Архів</div>
+              <div className="font-medium break-all">{fullRestoreModal.archive?.filename || '—'}</div>
+            </div>
+            <div className="rounded-lg border border-mil-700/70 bg-black/20 px-4 py-3">
+              <div className="text-xs text-gray-500 mb-1">Розмір</div>
+              <div className="font-medium">
+                {fullRestoreModal.archive?.size ? `${(Number(fullRestoreModal.archive.size) / 1024 / 1024).toFixed(2)} MB` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {fullRestoreModal.archive?.manifest ? (
+            <div className="rounded-lg border border-mil-700/70 bg-black/20 px-4 py-3">
+              <div className="font-medium mb-3">Manifest preview</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-xs text-gray-500">Manifest version</div>
+                  <div>{fullRestoreModal.archive.manifest.manifest_version || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Тип</div>
+                  <div>{fullRestoreModal.archive.manifest.backup_type || 'full'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Backend version</div>
+                  <div>{fullRestoreModal.archive.manifest.backend_version || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Frontend version</div>
+                  <div>{fullRestoreModal.archive.manifest.frontend_version || '—'}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-xs text-gray-500">Склад архіву</div>
+                  <div>{(fullRestoreModal.archive.manifest.includes || []).join(', ') || '—'}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-mil-700/70 bg-black/20 px-4 py-3 text-sm text-gray-300">
+              Для нового локального файлу manifest ще не прочитаний на сервері. Після завантаження система все одно перевірить архів перед відновленням.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Введіть `RESTORE` для підтвердження</label>
+            <input
+              className="input-field"
+              value={fullRestoreConfirm}
+              onChange={(e) => setFullRestoreConfirm(e.target.value)}
+              placeholder="RESTORE"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

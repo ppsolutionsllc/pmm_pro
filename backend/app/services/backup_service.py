@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
+import tarfile
+import tempfile
 import shutil
 import subprocess
 import re
@@ -27,6 +30,7 @@ _SCHEDULE_INTERVAL_HOURS_KEY = "backup.schedule_interval_hours"
 _ROTATION_KEEP_KEY = "backup.rotation_keep"
 _LAST_AUTO_BACKUP_AT_KEY = "backup.last_auto_backup_at"
 _LAST_AUTO_BACKUP_FILE_KEY = "backup.last_auto_backup_file"
+_FULL_BACKUP_MANIFEST_VERSION = 1
 
 
 def _require_binary(binary: str) -> None:
@@ -39,6 +43,44 @@ def _backup_dir() -> Path:
     p = Path(settings.backup_dir).expanduser().resolve()
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def _artifacts_dir() -> Path:
+    p = Path(settings.artifacts_dir).expanduser().resolve()
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _logs_dir() -> Path:
+    p = Path(settings.posting_error_log_path).expanduser().resolve().parent
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _summarize_full_backup_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    app_meta = manifest.get("app") or {}
+    return {
+        "manifest_version": int(manifest.get("manifest_version") or 0),
+        "backup_type": str(manifest.get("backup_type") or ""),
+        "created_at": manifest.get("created_at"),
+        "backend_version": app_meta.get("backend_version"),
+        "frontend_version": app_meta.get("frontend_version"),
+        "includes": ["database.dump", "artifacts.tar.gz", "logs.tar.gz"],
+    }
+
+
+def _read_full_backup_manifest_from_path(path: Path) -> dict[str, Any]:
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            manifest_member = archive.extractfile("manifest.json")
+            if not manifest_member:
+                raise BackupError("manifest.json is unreadable")
+            manifest = json.loads(manifest_member.read().decode("utf-8"))
+    except (tarfile.TarError, json.JSONDecodeError, OSError) as exc:
+        raise BackupError(f"Failed to read full backup manifest: {exc}") from exc
+    if manifest.get("backup_type") != "full":
+        raise BackupError("Full backup manifest has invalid backup_type")
+    return manifest
 
 
 def _is_postgres_database() -> bool:
@@ -77,6 +119,16 @@ def _retention_cleanup() -> None:
 def _retention_cleanup_with_keep(keep_count: int) -> None:
     keep = max(int(keep_count), 1)
     files = sorted(_backup_dir().glob("pmm_*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in files[keep:]:
+        try:
+            old.unlink(missing_ok=True)
+        except Exception:
+            continue
+
+
+def _retention_cleanup_for_pattern(pattern: str, keep_count: int) -> None:
+    keep = max(int(keep_count), 1)
+    files = sorted(_backup_dir().glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
     for old in files[keep:]:
         try:
             old.unlink(missing_ok=True)
@@ -153,6 +205,164 @@ def create_backup(*, keep_count: int | None = None, name_prefix: str = "pmm") ->
         }
 
 
+def _create_pg_dump_to_path(target_path: Path, *, params: dict[str, Any] | None = None) -> None:
+    params = params or _pg_conn_params()
+    _require_binary("pg_dump")
+    env = os.environ.copy()
+    if params["password"]:
+        env["PGPASSWORD"] = params["password"]
+    cmd = [
+        "pg_dump",
+        "--format=custom",
+        "--no-owner",
+        "--no-privileges",
+        "--host",
+        params["host"],
+        "--port",
+        str(params["port"]),
+        "--username",
+        params["username"],
+        "--file",
+        str(target_path),
+        params["database"],
+    ]
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise BackupError(f"pg_dump failed to start: {exc}") from exc
+    if proc.returncode != 0:
+        raise BackupError(f"pg_dump failed: {(proc.stderr or proc.stdout or '').strip()}")
+
+
+def _restore_pg_dump_from_path(source_path: Path, *, params: dict[str, Any] | None = None) -> None:
+    params = params or _pg_conn_params()
+    _require_binary("pg_restore")
+    env = os.environ.copy()
+    if params["password"]:
+        env["PGPASSWORD"] = params["password"]
+    cmd = [
+        "pg_restore",
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--no-privileges",
+        "--host",
+        params["host"],
+        "--port",
+        str(params["port"]),
+        "--username",
+        params["username"],
+        "--dbname",
+        params["database"],
+        str(source_path),
+    ]
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise BackupError(f"pg_restore failed to start: {exc}") from exc
+    if proc.returncode != 0:
+        raise BackupError(f"pg_restore failed: {(proc.stderr or proc.stdout or '').strip()}")
+
+
+def _write_directory_archive(source_dir: Path, target_archive: Path, *, root_name: str) -> None:
+    source_dir = source_dir.resolve()
+    with tarfile.open(target_archive, "w:gz") as archive:
+        root_info = tarfile.TarInfo(f"{root_name}/")
+        root_info.type = tarfile.DIRTYPE
+        root_info.mtime = int(utcnow().timestamp())
+        archive.addfile(root_info)
+        if not source_dir.exists():
+            return
+        for child in sorted(source_dir.iterdir(), key=lambda p: p.name):
+            archive.add(child, arcname=f"{root_name}/{child.name}")
+
+
+def _clear_directory_contents(target_dir: Path) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for child in target_dir.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink(missing_ok=True)
+
+
+def _restore_directory_archive(source_archive: Path, target_dir: Path, *, root_name: str) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="pmm_restore_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        with tarfile.open(source_archive, "r:gz") as archive:
+            archive.extractall(tmp_path)
+        extracted_root = tmp_path / root_name
+        if not extracted_root.exists() or not extracted_root.is_dir():
+            raise BackupError(f"Archive is missing required directory: {root_name}")
+        _clear_directory_contents(target_dir)
+        for child in sorted(extracted_root.iterdir(), key=lambda p: p.name):
+            destination = target_dir / child.name
+            if child.is_dir() and not child.is_symlink():
+                shutil.copytree(child, destination)
+            else:
+                shutil.copy2(child, destination)
+
+
+def create_full_backup(*, keep_count: int | None = None, name_prefix: str = "pmm_full") -> dict[str, Any]:
+    params = _pg_conn_params()
+    _require_binary("pg_dump")
+    with _backup_operation_lock():
+        ts = utcnow().strftime("%Y%m%d_%H%M%S")
+        safe_prefix = "".join(ch for ch in (name_prefix or "pmm_full") if ch.isalnum() or ch in ("_", "-")).strip("_-") or "pmm_full"
+        target = _backup_dir() / f"{safe_prefix}_{ts}.tar.gz"
+
+        with tempfile.TemporaryDirectory(prefix="pmm_full_backup_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            dump_path = tmp_path / "database.dump"
+            artifacts_archive = tmp_path / "artifacts.tar.gz"
+            logs_archive = tmp_path / "logs.tar.gz"
+            manifest_path = tmp_path / "manifest.json"
+
+            _create_pg_dump_to_path(dump_path, params=params)
+            _write_directory_archive(_artifacts_dir(), artifacts_archive, root_name="artifacts")
+            _write_directory_archive(_logs_dir(), logs_archive, root_name="logs")
+
+            manifest = {
+                "manifest_version": _FULL_BACKUP_MANIFEST_VERSION,
+                "backup_type": "full",
+                "created_at": utcnow().isoformat(),
+                "database": {
+                    "engine": "postgresql",
+                    "filename": dump_path.name,
+                    "size": dump_path.stat().st_size if dump_path.exists() else 0,
+                },
+                "artifacts": {
+                    "filename": artifacts_archive.name,
+                    "size": artifacts_archive.stat().st_size if artifacts_archive.exists() else 0,
+                },
+                "logs": {
+                    "filename": logs_archive.name,
+                    "size": logs_archive.stat().st_size if logs_archive.exists() else 0,
+                },
+                "app": {
+                    "backend_version": settings.backend_version,
+                    "frontend_version": settings.frontend_version,
+                },
+            }
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            with tarfile.open(target, "w:gz") as full_archive:
+                full_archive.add(dump_path, arcname=dump_path.name)
+                full_archive.add(artifacts_archive, arcname=artifacts_archive.name)
+                full_archive.add(logs_archive, arcname=logs_archive.name)
+                full_archive.add(manifest_path, arcname=manifest_path.name)
+
+        _retention_cleanup_for_pattern("pmm_full_*.tar.gz", keep_count or int(settings.backup_retention_count))
+        return {
+            "filename": target.name,
+            "path": str(target),
+            "size": target.stat().st_size if target.exists() else 0,
+            "created_at": utcnow().isoformat(),
+            "type": "full",
+        }
+
+
 def delete_backup(filename: str) -> dict[str, Any]:
     with _backup_operation_lock():
         path = resolve_backup_path(filename)
@@ -208,36 +418,120 @@ def save_uploaded_backup(
         }
 
 
-def restore_backup(filename: str) -> dict[str, Any]:
-    params = _pg_conn_params()
-    _require_binary("pg_restore")
-    path = resolve_backup_path(filename)
-    env = os.environ.copy()
-    if params["password"]:
-        env["PGPASSWORD"] = params["password"]
+def resolve_full_backup_path(filename: str) -> Path:
+    safe_name = Path(filename).name
+    p = (_backup_dir() / safe_name).resolve()
+    if p.parent != _backup_dir():
+        raise BackupError("Invalid backup filename")
+    if not p.exists():
+        raise BackupError("Full backup file not found")
+    return p
+
+
+def verify_full_backup(filename: str) -> dict[str, Any]:
+    path = resolve_full_backup_path(filename)
+    if path.stat().st_size <= 0:
+        return {"ok": False, "reason": "file is empty", "filename": filename}
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            names = set(archive.getnames())
+            required = {"manifest.json", "database.dump", "artifacts.tar.gz", "logs.tar.gz"}
+            missing = sorted(required - names)
+            if missing:
+                return {
+                    "ok": False,
+                    "reason": f"archive is missing required files: {', '.join(missing)}",
+                    "filename": filename,
+                }
+            manifest_member = archive.extractfile("manifest.json")
+            if not manifest_member:
+                return {"ok": False, "reason": "manifest.json is unreadable", "filename": filename}
+            manifest = json.loads(manifest_member.read().decode("utf-8"))
+            if manifest.get("backup_type") != "full":
+                return {"ok": False, "reason": "invalid backup_type in manifest", "filename": filename}
+            if int(manifest.get("manifest_version") or 0) != _FULL_BACKUP_MANIFEST_VERSION:
+                return {"ok": False, "reason": "unsupported manifest version", "filename": filename}
+    except (tarfile.TarError, json.JSONDecodeError, OSError) as exc:
+        return {"ok": False, "reason": str(exc), "filename": filename}
+    return {
+        "ok": True,
+        "filename": filename,
+        "size": path.stat().st_size,
+        "type": "full",
+        "manifest": _summarize_full_backup_manifest(manifest),
+    }
+
+
+def save_uploaded_full_backup(
+    file_obj,
+    original_filename: str | None,
+    *,
+    keep_count: int | None = None,
+    name_prefix: str = "pmm_full_import",
+) -> dict[str, Any]:
     with _backup_operation_lock():
-        cmd = [
-            "pg_restore",
-            "--clean",
-            "--if-exists",
-            "--no-owner",
-            "--no-privileges",
-            "--host",
-            params["host"],
-            "--port",
-            str(params["port"]),
-            "--username",
-            params["username"],
-            "--dbname",
-            params["database"],
-            str(path),
-        ]
+        ts = utcnow().strftime("%Y%m%d_%H%M%S")
+        safe_name = _slug_name(Path(original_filename or "backup").stem)
+        safe_prefix = "".join(ch for ch in (name_prefix or "pmm_full_import") if ch.isalnum() or ch in ("_", "-")).strip("_-") or "pmm_full_import"
+        target = _backup_dir() / f"{safe_prefix}_{ts}_{safe_name}.tar.gz"
         try:
-            proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
-        except OSError as exc:
-            raise BackupError(f"pg_restore failed to start: {exc}") from exc
-        if proc.returncode != 0:
-            raise BackupError(f"pg_restore failed: {(proc.stderr or proc.stdout or '').strip()}")
+            with open(target, "wb") as out:
+                shutil.copyfileobj(file_obj, out)
+        except Exception as exc:
+            raise BackupError(f"Failed to save uploaded full backup: {exc}") from exc
+        if not target.exists() or target.stat().st_size <= 0:
+            target.unlink(missing_ok=True)
+            raise BackupError("Uploaded full backup file is empty")
+        verification = verify_full_backup(target.name)
+        if not verification.get("ok"):
+            target.unlink(missing_ok=True)
+            raise BackupError(f"Uploaded full backup verification failed: {verification.get('reason') or 'unknown error'}")
+
+        _retention_cleanup_for_pattern("pmm_full_*.tar.gz", keep_count or int(settings.backup_retention_count))
+        return {
+            "filename": target.name,
+            "path": str(target),
+            "size": int(target.stat().st_size),
+            "created_at": utcnow().isoformat(),
+            "verified": True,
+            "type": "full",
+        }
+
+
+def restore_full_backup(filename: str) -> dict[str, Any]:
+    params = _pg_conn_params()
+    path = resolve_full_backup_path(filename)
+    with _backup_operation_lock():
+        with tempfile.TemporaryDirectory(prefix="pmm_full_restore_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            try:
+                with tarfile.open(path, "r:gz") as archive:
+                    archive.extractall(tmp_path)
+            except (tarfile.TarError, OSError) as exc:
+                raise BackupError(f"Failed to extract full backup archive: {exc}") from exc
+
+            manifest_path = tmp_path / "manifest.json"
+            dump_path = tmp_path / "database.dump"
+            artifacts_archive = tmp_path / "artifacts.tar.gz"
+            logs_archive = tmp_path / "logs.tar.gz"
+            if not manifest_path.exists() or not dump_path.exists() or not artifacts_archive.exists() or not logs_archive.exists():
+                raise BackupError("Full backup archive is incomplete")
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                raise BackupError(f"Full backup manifest is invalid: {exc}") from exc
+            if manifest.get("backup_type") != "full":
+                raise BackupError("Full backup manifest has invalid backup_type")
+
+            _restore_pg_dump_from_path(dump_path, params=params)
+            _restore_directory_archive(artifacts_archive, _artifacts_dir(), root_name="artifacts")
+            _restore_directory_archive(logs_archive, _logs_dir(), root_name="logs")
+        return {"ok": True, "filename": filename, "restored_at": utcnow().isoformat(), "type": "full"}
+
+
+def restore_backup(filename: str) -> dict[str, Any]:
+    with _backup_operation_lock():
+        _restore_pg_dump_from_path(resolve_backup_path(filename))
         return {"ok": True, "filename": filename, "restored_at": utcnow().isoformat()}
 
 
@@ -253,6 +547,32 @@ def list_backups() -> list[dict[str, Any]]:
                 "size": int(st.st_size),
                 "mtime": int(st.st_mtime),
                 "created_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            }
+        )
+    return out
+
+
+def list_full_backups() -> list[dict[str, Any]]:
+    files = sorted(_backup_dir().glob("pmm_full_*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+    out = []
+    for p in files:
+        st = p.stat()
+        manifest_summary: dict[str, Any] | None = None
+        manifest_error: str | None = None
+        try:
+            manifest_summary = _summarize_full_backup_manifest(_read_full_backup_manifest_from_path(p))
+        except BackupError as exc:
+            manifest_error = str(exc)
+        out.append(
+            {
+                "filename": p.name,
+                "path": str(p),
+                "size": int(st.st_size),
+                "mtime": int(st.st_mtime),
+                "created_at": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                "type": "full",
+                "manifest": manifest_summary,
+                "manifest_error": manifest_error,
             }
         )
     return out

@@ -331,6 +331,156 @@ async def upload_and_restore_real_backup(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.post("/settings/full-backups/create")
+async def create_full_backup(current_user=Depends(deps.require_role("ADMIN"))):
+    try:
+        async with async_session() as session:
+            runtime_cfg = await backup_service.get_backup_runtime_config(session)
+        keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
+        return await asyncio.to_thread(backup_service.create_full_backup, keep_count=keep, name_prefix="pmm_full")
+    except backup_service.BackupError as exc:
+        async with async_session() as session:
+            async with session.begin():
+                await incident_service.create_incident(
+                    session,
+                    incident_type=IncidentType.BACKUP_FAILED,
+                    severity=IncidentSeverity.HIGH,
+                    message=f"Full backup failed: {exc}",
+                    details_json={"operation": "full_backup", "error": str(exc)},
+                    created_by=current_user.id,
+                )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/settings/full-backups")
+async def list_full_backups(current_user=Depends(deps.require_role("ADMIN"))):
+    return await asyncio.to_thread(backup_service.list_full_backups)
+
+
+@router.post("/settings/full-backups/{filename}/verify")
+async def verify_full_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
+    try:
+        return await asyncio.to_thread(backup_service.verify_full_backup, filename)
+    except backup_service.BackupError as exc:
+        async with async_session() as session:
+            async with session.begin():
+                await incident_service.create_incident(
+                    session,
+                    incident_type=IncidentType.BACKUP_FAILED,
+                    severity=IncidentSeverity.MEDIUM,
+                    message=f"Full backup verify failed: {exc}",
+                    details_json={"operation": "verify_full_backup", "filename": filename, "error": str(exc)},
+                    created_by=current_user.id,
+                )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/settings/full-backups/{filename}/restore")
+async def restore_full_backup(
+    filename: str,
+    payload: BackupRestorePayload,
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    if payload.confirm.strip().upper() != "RESTORE":
+        raise HTTPException(status_code=400, detail="Для відновлення введіть confirm=RESTORE")
+    try:
+        return await asyncio.to_thread(backup_service.restore_full_backup, filename)
+    except backup_service.BackupError as exc:
+        async with async_session() as session:
+            async with session.begin():
+                await incident_service.create_incident(
+                    session,
+                    incident_type=IncidentType.BACKUP_FAILED,
+                    severity=IncidentSeverity.HIGH,
+                    message=f"Full backup restore failed: {exc}",
+                    details_json={"operation": "restore_full_backup", "filename": filename, "error": str(exc)},
+                    created_by=current_user.id,
+                )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/settings/full-backups/upload")
+async def upload_full_backup(
+    file: UploadFile = File(...),
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    try:
+        async with async_session() as session:
+            runtime_cfg = await backup_service.get_backup_runtime_config(session)
+        keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
+        return await asyncio.to_thread(
+            backup_service.save_uploaded_full_backup,
+            file.file,
+            file.filename,
+            keep_count=keep,
+            name_prefix="pmm_full_import",
+        )
+    except backup_service.BackupError as exc:
+        async with async_session() as session:
+            async with session.begin():
+                await incident_service.create_incident(
+                    session,
+                    incident_type=IncidentType.BACKUP_FAILED,
+                    severity=IncidentSeverity.HIGH,
+                    message=f"Full backup upload failed: {exc}",
+                    details_json={"operation": "upload_full_backup", "filename": file.filename, "error": str(exc)},
+                    created_by=current_user.id,
+                )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/settings/full-backups/upload-and-restore")
+async def upload_and_restore_full_backup(
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    current_user=Depends(deps.require_role("ADMIN")),
+):
+    if confirm.strip().upper() != "RESTORE":
+        raise HTTPException(status_code=400, detail="Для відновлення введіть confirm=RESTORE")
+    try:
+        async with async_session() as session:
+            runtime_cfg = await backup_service.get_backup_runtime_config(session)
+        keep = int(runtime_cfg.get("rotation_keep") or settings.backup_retention_count)
+        uploaded = await asyncio.to_thread(
+            backup_service.save_uploaded_full_backup,
+            file.file,
+            file.filename,
+            keep_count=keep,
+            name_prefix="pmm_full_import",
+        )
+        restored = await asyncio.to_thread(backup_service.restore_full_backup, str(uploaded.get("filename")))
+        return {"uploaded": uploaded, "restored": restored}
+    except backup_service.BackupError as exc:
+        async with async_session() as session:
+            async with session.begin():
+                await incident_service.create_incident(
+                    session,
+                    incident_type=IncidentType.BACKUP_FAILED,
+                    severity=IncidentSeverity.HIGH,
+                    message=f"Full backup upload+restore failed: {exc}",
+                    details_json={"operation": "upload_and_restore_full_backup", "filename": file.filename, "error": str(exc)},
+                    created_by=current_user.id,
+                )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/settings/full-backups/{filename}")
+async def delete_full_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
+    try:
+        return await asyncio.to_thread(backup_service.delete_backup, filename)
+    except backup_service.BackupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/settings/full-backups/{filename}/download")
+async def download_full_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
+    try:
+        path = await asyncio.to_thread(backup_service.resolve_full_backup_path, filename)
+    except backup_service.BackupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return FileResponse(path=str(path), filename=path.name)
+
+
 @router.delete("/settings/backups/{filename}")
 async def delete_real_backup(filename: str, current_user=Depends(deps.require_role("ADMIN"))):
     try:

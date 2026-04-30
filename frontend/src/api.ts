@@ -239,10 +239,17 @@ export const api = {
   // backup / restore
   createDbBackup: () => request('/settings/backups/create', { method: 'POST' }),
   listDbBackups: () => request('/settings/backups'),
+  createFullBackup: () => request('/settings/full-backups/create', { method: 'POST' }),
+  listFullBackups: () => request('/settings/full-backups'),
   uploadDbBackup: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
     return request('/settings/backups/upload', { method: 'POST', body: fd });
+  },
+  uploadFullBackup: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return request('/settings/full-backups/upload', { method: 'POST', body: fd });
   },
   uploadAndRestoreDbBackup: (file: File, confirm = 'RESTORE') => {
     const fd = new FormData();
@@ -250,12 +257,24 @@ export const api = {
     fd.append('confirm', confirm);
     return request('/settings/backups/upload-and-restore', { method: 'POST', body: fd });
   },
+  uploadAndRestoreFullBackup: (file: File, confirm = 'RESTORE') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('confirm', confirm);
+    return request('/settings/full-backups/upload-and-restore', { method: 'POST', body: fd });
+  },
   getDbBackupConfig: () => request('/settings/backups/config'),
   setDbBackupConfig: (data: { schedule_enabled: boolean; schedule_interval_hours: number; rotation_keep: number }) =>
     request('/settings/backups/config', { method: 'POST', body: JSON.stringify(data) }),
   verifyDbBackup: (filename: string) => request(`/settings/backups/${encodeURIComponent(filename)}/verify`, { method: 'POST' }),
+  verifyFullBackup: (filename: string) => request(`/settings/full-backups/${encodeURIComponent(filename)}/verify`, { method: 'POST' }),
   restoreDbBackup: (filename: string, confirm = 'RESTORE') =>
     request(`/settings/backups/${encodeURIComponent(filename)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    }),
+  restoreFullBackup: (filename: string, confirm = 'RESTORE') =>
+    request(`/settings/full-backups/${encodeURIComponent(filename)}/restore`, {
       method: 'POST',
       body: JSON.stringify({ confirm }),
     }),
@@ -268,6 +287,8 @@ export const api = {
   }) => request('/settings/system/reset', { method: 'POST', body: JSON.stringify(data) }),
   deleteDbBackup: (filename: string) => request(`/settings/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
   downloadDbBackup: (filename: string) => requestBlob(`/settings/backups/${encodeURIComponent(filename)}/download`),
+  deleteFullBackup: (filename: string) => request(`/settings/full-backups/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  downloadFullBackup: (filename: string) => requestBlob(`/settings/full-backups/${encodeURIComponent(filename)}/download`),
 
   // reports / export jobs
   getVehicleConsumptionReport: (filters?: any) => request(withQuery('/reports/vehicle-consumption', filters)),
