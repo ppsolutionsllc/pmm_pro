@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
+import bcrypt
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 
@@ -13,7 +14,20 @@ from app.config import settings
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
+def _looks_like_bcrypt_hash(value: str) -> bool:
+    token = str(value or "")
+    return token.startswith("$2a$") or token.startswith("$2b$") or token.startswith("$2y$")
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if _looks_like_bcrypt_hash(hashed_password):
+        try:
+            return bcrypt.checkpw(
+                str(plain_password or "").encode("utf-8"),
+                str(hashed_password or "").encode("utf-8"),
+            )
+        except Exception:
+            return False
     return pwd_context.verify(plain_password, hashed_password)
 
 
