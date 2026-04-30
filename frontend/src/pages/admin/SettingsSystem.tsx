@@ -446,6 +446,10 @@ function BackupRestore() {
     archive: any | null;
   }>({ open: false, source: 'stored', archive: null });
   const [fullRestoreConfirm, setFullRestoreConfirm] = useState('');
+  const [preRestoreBackupInfo, setPreRestoreBackupInfo] = useState<{
+    filename: string;
+    createdAt: string;
+  } | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
@@ -483,12 +487,14 @@ function BackupRestore() {
 
   const openFullRestoreModal = (source: 'stored' | 'upload', archive: any | null) => {
     setFullRestoreConfirm('');
+    setPreRestoreBackupInfo(null);
     setFullRestoreModal({ open: true, source, archive });
   };
 
   const closeFullRestoreModal = () => {
     setFullRestoreModal({ open: false, source: 'stored', archive: null });
     setFullRestoreConfirm('');
+    setPreRestoreBackupInfo(null);
   };
 
   const confirmFullRestore = async () => {
@@ -543,6 +549,10 @@ function BackupRestore() {
         `Створено страховий full backup${result?.filename ? `: ${result.filename}` : ''}`,
         'success',
       );
+      setPreRestoreBackupInfo({
+        filename: String(result?.filename || '—'),
+        createdAt: new Date().toISOString(),
+      });
       await loadAll();
     } catch (e: any) {
       toast(e.message || 'Не вдалося створити страховий full backup', 'error');
@@ -1067,6 +1077,16 @@ function BackupRestore() {
               Якщо потрібен відкат назад, спочатку створіть новий повний бекап поточного стану.
             </div>
           </div>
+
+          {preRestoreBackupInfo && (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              <div className="font-semibold mb-1">Точка відкату створена</div>
+              <div>{preRestoreBackupInfo.filename}</div>
+              <div className="text-xs text-emerald-200/90 mt-1">
+                Створено: {new Date(preRestoreBackupInfo.createdAt).toLocaleString('uk-UA')}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-mil-700/70 bg-black/20 px-4 py-3">
