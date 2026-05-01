@@ -1,9 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
-import bcrypt
 from passlib.context import CryptContext
-from passlib.hash import django_bcrypt_sha256, django_pbkdf2_sha256
 from jose import JWTError, jwt
 
 from app.config import settings
@@ -15,56 +13,8 @@ from app.config import settings
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
-def _looks_like_bcrypt_hash(value: str) -> bool:
-    token = str(value or "")
-    return token.startswith("$2a$") or token.startswith("$2b$") or token.startswith("$2y$")
-
-
-def _looks_like_django_pbkdf2_hash(value: str) -> bool:
-    return str(value or "").startswith("pbkdf2_sha256$")
-
-
-def _looks_like_django_bcrypt_sha256_hash(value: str) -> bool:
-    return str(value or "").startswith("bcrypt_sha256$")
-
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    token = str(hashed_password or "")
-    if _looks_like_bcrypt_hash(token):
-        try:
-            return bcrypt.checkpw(
-                str(plain_password or "").encode("utf-8"),
-                token.encode("utf-8"),
-            )
-        except Exception:
-            return False
-    if _looks_like_django_pbkdf2_hash(token):
-        try:
-            return bool(django_pbkdf2_sha256.verify(plain_password, token))
-        except Exception:
-            return False
-    if _looks_like_django_bcrypt_sha256_hash(token):
-        try:
-            return bool(django_bcrypt_sha256.verify(plain_password, token))
-        except Exception:
-            return False
-    return pwd_context.verify(plain_password, token)
-
-
-def needs_password_rehash(hashed_password: str) -> bool:
-    token = str(hashed_password or "")
-    if not token:
-        return False
-    if (
-        _looks_like_bcrypt_hash(token)
-        or _looks_like_django_pbkdf2_hash(token)
-        or _looks_like_django_bcrypt_sha256_hash(token)
-    ):
-        return True
-    try:
-        return bool(pwd_context.needs_update(token))
-    except Exception:
-        return False
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
