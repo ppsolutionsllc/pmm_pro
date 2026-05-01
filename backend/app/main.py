@@ -163,13 +163,25 @@ def _trusted_hosts_with_internal_defaults(values: list[str]) -> list[str]:
         settings.frontend_base_url,
         settings.print_qr_target_url,
     ):
-        host = _normalize_host(str(public_url or ""))
+        raw_public = str(public_url or "").strip()
+        host = _normalize_host(raw_public)
         if host and host not in cleaned:
             cleaned.append(host)
         if ":" in host:
             hostname = host.split(":", 1)[0].strip()
             if hostname and hostname not in cleaned:
                 cleaned.append(hostname)
+        elif "://" in raw_public:
+            parsed = urlparse(raw_public)
+            scheme = (parsed.scheme or "").strip().lower()
+            if scheme == "https":
+                https_host = f"{host}:443"
+                if host and https_host not in cleaned:
+                    cleaned.append(https_host)
+            elif scheme == "http":
+                http_host = f"{host}:80"
+                if host and http_host not in cleaned:
+                    cleaned.append(http_host)
     for internal in (
         "127.0.0.1",
         "127.0.0.1:8000",
