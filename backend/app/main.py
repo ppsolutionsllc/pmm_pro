@@ -11,7 +11,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -198,9 +197,7 @@ def _trusted_hosts_with_internal_defaults(values: list[str]) -> list[str]:
 
 
 trusted_hosts = _trusted_hosts_with_internal_defaults(settings.allowed_hosts)
-if trusted_hosts and "*" not in trusted_hosts:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
-logger.info("Trusted hosts configured: %s", ",".join(trusted_hosts))
+logger.info("Trusted host validation disabled; configured hosts=%s", ",".join(trusted_hosts))
 
 
 @app.middleware("http")
