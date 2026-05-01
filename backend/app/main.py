@@ -188,6 +188,8 @@ def _trusted_hosts_with_internal_defaults(values: list[str]) -> list[str]:
         "localhost:8000",
         "backend",
         "backend:8000",
+        "pmm-api-internal",
+        "pmm-api-internal:8000",
         "frontend",
         "frontend:80",
     ):
