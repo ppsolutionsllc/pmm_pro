@@ -6,6 +6,7 @@ asyncpg==0.31.0
 alembic==1.18.4
 psycopg2-binary==2.9.11
 passlib==1.7.4
+bcrypt==4.3.0
 python-jose[cryptography]==3.5.0
 python-dotenv==1.2.2
 python-multipart==0.0.22
